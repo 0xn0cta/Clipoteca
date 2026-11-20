@@ -2,6 +2,14 @@
 
 **Regla de ejecución:** completar en orden salvo dependencias explícitas. Una tarea por vez; mantener build verde; marcar `[x]` solo tras verificar. La revisión del propietario se solicita en los checkpoints de `tasks/plan.md`.
 
+## Base recibida
+
+- El colaborador ya añadió análisis, descarga, queue manager SQLite, historial, preview y bandeja. Reutilizar/revisar `clipoteca/`; no reimplementar esos módulos sin causa.
+- El baseline verificable en esta integración es 22 tests Python, build y lint. El flujo live de yt-dlp, FFmpeg, bandeja, WebView2 e instalador aún no se probó en Windows.
+- YouTube allowlist, concurrencia inicial, validación de rutas del puente, nombres reservados y MP4 sin recodificación silenciosa se reconciliaron; revisar sus tests antes de avanzar.
+- No hay todavía suite React/Vitest ni CI; no marcar T01/T02 como completadas por la suite `unittest`.
+- El resto de tareas permanece abierto hasta pasar todos sus criterios.
+
 ## Fase 1 — Base de ingeniería
 
 ### T01 — Añadir test runners Python y React

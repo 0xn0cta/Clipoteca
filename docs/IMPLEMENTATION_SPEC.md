@@ -33,12 +33,15 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 - Seleccionar/deseleccionar elementos; los no disponibles aparecen deshabilitados y con motivo cuando se conozca.
 - Elegir video MP4, audio MP3 o ambos.
 - Ofrecer “Automática / mejor disponible” y resoluciones solo cuando existan en la fuente.
+- Permitir previsualizar el elemento seleccionado con miniatura y reproducción directa cuando el formato/origen lo permita. La vista previa no escribe archivos y puede fallar por restricciones del origen.
 - Usar `Descargas/Clipoteca` por defecto, recordar la carpeta seleccionada y permitir un override por lote.
 - Crear una subcarpeta segura por playlist.
 - Omitir duplicados y avisar sin sobrescribir.
 - Cola con estados, progreso por elemento y agregado, cancelación, reintento manual y resumen de éxitos/errores.
 - Continuar una playlist aunque falle un elemento; el error se representa en ese elemento.
 - Reanudar archivos parciales cuando `yt-dlp` lo permita.
+- Separar la cola activa del historial finalizado; permitir abrir un archivo terminado con su aplicación predeterminada y limpiar solo los registros, nunca los archivos.
+- Permitir continuar en segundo plano desde la bandeja de Windows o pausar y cerrar la app cuando haya trabajo activo.
 - Guardar localmente la preferencia de carpeta y concurrencia, además de lo necesario para recuperar trabajos interrumpidos.
 - Mensajes en español con acción de recuperación cuando aplique.
 
@@ -78,7 +81,8 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 3. Video/audio/ambos controla la salida; calidad se desactiva en audio-only.
 4. Las calidades se obtienen del análisis, no de una lista inventada. La opción automática prioriza la mejor calidad compatible con el formato elegido.
 5. Elegir carpeta mediante diálogo nativo de escritorio. Cancelar el diálogo conserva el destino anterior.
-6. La validación muestra qué se guardará, el destino y los elementos omitidos antes de iniciar.
+6. La vista previa resuelve el elemento seleccionado en modo de solo reproducción; no se guarda ni se usa como sustituto del archivo descargado.
+7. La validación muestra qué se guardará, el destino y los elementos omitidos antes de iniciar.
 
 ### W4 — Descargar video, audio o playlist
 
@@ -89,7 +93,15 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 5. Error recuperable de un elemento no detiene el resto de la playlist.
 6. Al final, mostrar resumen: completados, omitidos, fallidos y acciones de reintento.
 
-### W5 — Cancelar, reintentar y recuperar
+### W5 — Previsualizar y revisar historial
+
+- Previsualizar el elemento seleccionado solo cuando el origen entregue un flujo directamente reproducible.
+- La vista previa usa miniatura/controles nativos y no crea un archivo descargado.
+- Si el WebView no puede reproducir el flujo, conservar metadatos/miniatura y explicar que la fuente no permite preview embebido.
+- El historial separa resultados finalizados; abrir archivo usa la aplicación predeterminada de Windows.
+- Limpiar el historial elimina registros de Clipoteca, nunca archivos descargados.
+
+### W6 — Cancelar, reintentar y recuperar
 
 - Cancelar una tarea afecta esa tarea; cancelar un lote pregunta solo si hay trabajo activo y explica el alcance.
 - Cancelar conserva el `.part` cuando sea seguro; no deja una tarea marcada como completada.
@@ -97,6 +109,9 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 - Al reabrir la app, convertir tareas que estaban descargándose a `Interrumpida`; ofrecer reanudar o descartar.
 - Duplicado en disco → `Omitido`, mostrar nombre/ruta y no sobrescribir.
 - Errores terminales (no disponible, permisos, disco lleno, FFmpeg ausente) no reciben reintentos automáticos.
+- Al cerrar con tareas pendientes/activas, ofrecer continuar en segundo plano (si la bandeja está disponible), pausar y cerrar, o volver a la app.
+- El historial solo contiene resultados; limpiar el historial no elimina archivos descargados.
+- La bandeja Windows ofrece abrir, pausar/reanudar, cancelar y salir; notificaciones informan de lotes finalizados/fallidos.
 
 ## 5. Estados y datos
 
@@ -134,26 +149,27 @@ No serializar callbacks, instancias `YoutubeDL`, excepciones ni rutas arbitraria
 ### Métodos previstos
 
 - `get_app_status()`
-- `get_settings()`
-- `save_settings(settings)`
-- `choose_folder()`
 - `analyze_url(url)`
-- `start_batch(request)`
-- `cancel_task(task_id)` / `cancel_batch(batch_id)`
-- `retry_task(task_id)`
-- `get_queue_snapshot()`
-- `remove_completed(task_ids)`
+- `get_preview(analysis_id, item_id, output_format, quality)`
+- `enqueue_batch(analysis_id, selected_ids, output_format, quality)`
+- `get_queue_state()` / `get_preferences()`
+- `set_preferences(values)` / `choose_destination()`
+- `pause_all()` / `resume_all()` / `cancel_item(task_id)` / `cancel_all()`
+- `retry_item(task_id)` / `clear_history()` / `open_history_file(task_id, index)`
+- `continue_in_background()` / `pause_and_close()`
 
-Los nombres pueden ajustarse en T04, pero el contrato debe quedar documentado y tipado en Python y TypeScript antes de conectar la UI.
+`enqueue_batch` no acepta rutas del renderer: utiliza la carpeta persistida y `choose_destination()` la cambia mediante diálogo nativo. La implementación existente usa estos nombres; si el puente necesita refactor, conservar la semántica y actualizar Python y TypeScript juntos.
 
-### Eventos hacia React
+### Sincronización de estado
 
-- `analysis_started`, `analysis_completed`, `analysis_failed`
-- `queue_snapshot`, `task_state_changed`
-- `download_progress` (por tarea y agregado)
-- `batch_completed`
+La UI actual consulta `get_queue_state()` de forma periódica. El MVP debe mantener la UI responsiva y evitar trabajo de descarga en el renderer; puede conservar el polling mientras su costo sea acotado, o sustituirlo por eventos tipados si se demuestra más fiable. Nunca duplicar actualizaciones ni congelar la ventana.
 
-Normalizar el payload: IDs estables, progreso nullable, tiempos en segundos, estados enumerados y error estructurado. El hilo visual nunca espera una descarga.
+### Payloads de estado
+
+- `get_queue_state()` devuelve `queue`, `history`, `counts` y `preferences`.
+- Cada tarea mantiene ID estable, batch, estado, progreso nullable, bytes/ETA cuando existen, rutas finales y error legible.
+- La UI actual consulta el snapshot cada 1.2 segundos. Mantenerlo mientras sea estable; sustituirlo por eventos solo si se documenta el contrato y se evita polling duplicado.
+- El hilo visual nunca espera un análisis o una descarga.
 
 ## 7. Archivos y preferencias locales
 

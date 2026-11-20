@@ -1,0 +1,1 @@
+"""Clipoteca desktop application services."""

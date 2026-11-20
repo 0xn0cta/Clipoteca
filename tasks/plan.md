@@ -4,6 +4,14 @@
 
 Convertir el prototipo visual de Clipoteca en una app Windows funcional para analizar videos/playlists de YouTube, preparar formatos y destinos, descargar en una cola recuperable y empaquetar una build revisable.
 
+## Estado de partida: entrega del colaborador `b4cba94`
+
+Ya existen `clipoteca/api.py`, `engine.py`, `manager.py`, `storage.py` y `tray.py`, además de análisis, preview best-effort, descargas, cola persistente, historial y controles de bandeja. En esta integración comprobamos 22 tests Python, `npm run build` y `npm run lint`; eso no equivale a un smoke real de Windows/YouTube.
+
+Correcciones añadidas en esta integración: YouTube como único host permitido, selección de concurrencia en el primer inicio (con migración de defaults automáticos anteriores), rutas sin editar desde el puente, nombres reservados de Windows, MP4 sin recodificación silenciosa y marca C-archivo en app/favicon/bandeja. El logo sigue siendo una propuesta en revisión.
+
+Las casillas siguientes no se marcan solo porque haya código equivalente: deben cumplir todos los criterios de aceptación y verificarse. Revisar primero los módulos existentes antes de crear duplicados. Aún no hay tests automatizados React, CI ni smoke manual de WebView2/FFmpeg/bandeja.
+
 ## Arquitectura y decisiones
 
 - Renderer local: React + TypeScript + Vite; escritorio: pywebview; backend: Python.

@@ -34,11 +34,18 @@ The first release targets Windows. A user pastes a video or playlist URL, review
 - Prefer the best available quality by default, with a selector for available qualities.
 - Use `Descargas/Clipoteca` as the initial destination, remember it, and allow changing it for a download.
 - Put playlist files in a subfolder named after the playlist.
+- Offer a selected-item preview before downloading, using artwork and direct audio/video playback when the source supports it; preview playback does not save a file.
+- Let users open a completed output from history with its Windows default application.
 - Skip existing duplicate files and notify the user; do not silently overwrite.
-- Ask for the download concurrency on first launch, remember the choice, and allow changing it later. Do not impose an application-level maximum.
+- Ask for concurrency mode on first launch and remember the user’s choice. Manual mode has no application-imposed maximum; automatic mode adapts to observed throughput and uses a ceiling explicitly chosen by the user. Do not silently default to a ceiling.
+- Keep completed items in a separate, manually clearable history. Failed items remain in the active queue for individual retries and stay linked to their original batch.
+- On close with queued or active downloads, offer continue-in-background (tray), pause-and-close (preserve partial files), or return to the app. The Windows tray can open the app, pause/resume, cancel, and exit.
+- Persist queue state locally and recover interrupted downloads as paused so the user can resume them. Cancellation removes only the incomplete temporary file; clearing history never deletes downloaded media.
+- Show user-facing Spanish errors and retain a local technical log for debugging.
 - FFmpeg is planned to ship with the Windows installer; distribution licensing and notices must be checked before release.
-- Scope is limited to content the user owns or is authorized to download. No DRM circumvention or authentication/cookie import is in scope.
-- Playlist failure recovery, cancellation/resume behavior, queue recovery after restart, and final installer details are specified for implementation and must be verified by tests.
+- Automatic retry policy is three retries for transient errors; continue the batch after an item fails and leave failed items available for manual retry. Validate partial-file resume behavior against real sites during Windows testing.
+- FFmpeg packaging, licensing, and final Windows installer details remain to be verified.
+- Scope is YouTube videos/playlists the user owns or is authorized to save. No other sites, DRM circumvention, authentication, or cookie import in the MVP.
 
 ## Brand Commitments
 
@@ -48,7 +55,7 @@ The first release targets Windows. A user pastes a video or playlist URL, review
 
 ## Evidence on Hand
 
-The current interface prototype lives in `frontend/src/` and its latest desktop screenshot is `docs/screenshots/clipoteca-desktop.png`. Playlist rows shown in the prototype are fictional demonstration data, not analyzed YouTube content. No user research or licensed media assets are on hand.
+The current interface and desktop screenshot are in `frontend/src/` and `docs/screenshots/clipoteca-desktop.png`. The first vector logo direction is in `docs/brand/`; it is still a draft pending owner approval. Playlist rows shown before source analysis are fictional only. No user research or licensed media assets are on hand.
 
 ## Product Principles
 

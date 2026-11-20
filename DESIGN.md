@@ -17,11 +17,11 @@ colors:
   text-on-primary: "#211D2A"
 typography:
   display:
-    fontFamily: "Instrument Serif, Georgia, serif"
+    fontFamily: "Manrope, Segoe UI, sans-serif"
     fontSize: "clamp(42px, 4.8vw, 60px)"
-    fontWeight: 400
-    lineHeight: 0.98
-    letterSpacing: "-0.035em"
+    fontWeight: 650
+    lineHeight: 1.04
+    letterSpacing: "-0.045em"
   body:
     fontFamily: "Manrope, Segoe UI, sans-serif"
     fontSize: "14px"
@@ -58,6 +58,12 @@ components:
   nav-active:
     textColor: "{colors.text-primary}"
     height: "76px"
+  brand-mark:
+    textColor: "{colors.primary}"
+    size: "30px"
+  brand-mark:
+    textColor: "{colors.primary}"
+    size: "30px"
   sample-chip:
     backgroundColor: "#211F2A"
     textColor: "#C7B8E7"
@@ -87,12 +93,13 @@ components:
 
 Clipoteca feels like a carefully kept personal media collection, not a broadcast console or an industrial control surface. The interface gives the source URL a clear place, then lets the playlist read like a considered catalogue: roomy rows, quiet metadata, and unmistakable choices.
 
-The dark blue-ink setting remains calm rather than dramatic. Instrument Serif brings an editorial note to the main titles; Manrope keeps controls and media details direct. Muted iris marks the selected state and the primary action without turning the whole screen into an accent-colored dashboard.
+The dark blue-ink setting remains calm rather than dramatic. Manrope is used throughout for a clear, consistent desktop interface; stronger weight and compact spacing distinguish headings from controls. Muted iris marks the selected state and the primary action without turning the whole screen into an accent-colored dashboard.
 
 **Key Characteristics:**
 - Personal archive mood with an editorial display voice.
 - Dark blue-ink surfaces and soft ivory text.
 - Muted iris accent for selected and primary states.
+- A C-shaped archive-frame mark with an index tab, pending final owner approval.
 - Playlist rows remain explicit, ordered, and easy to scan.
 - Prototype content and unavailable items are clearly disclosed.
 
@@ -122,16 +129,16 @@ The palette uses deep blue ink, soft ivory type, a restrained iris accent, and q
 
 ## Typography
 
-**Display Font:** Instrument Serif (with Georgia, serif fallback)
+**Display Font:** Manrope (with Segoe UI, sans-serif fallback)
 
 **Body Font:** Manrope (with Segoe UI, sans-serif fallback)
 **Label/Mono Font:** Manrope; tabular numerals are used for durations and counts.
 
-**Character:** Instrument Serif gives the collection a quiet editorial voice. Manrope keeps operational choices crisp and familiar, so the premium tone never makes the controls feel precious.
+**Character:** Manrope gives headings and controls one consistent, contemporary voice. Weight and spacing provide hierarchy without the previous serif contrast.
 
 ### Hierarchy
-- **Display** (400, `clamp(42px, 4.8vw, 60px)`, `0.98`): Main page title.
-- **Headline** (400, `30px`, `1`): Playlist and empty-state headings.
+- **Display** (650, `clamp(42px, 4.8vw, 60px)`, `1.04`): Main page title.
+- **Headline** (650, `22–24px`, `1.2`): Playlist and empty-state headings.
 - **Title** (600, `12–14px`, `1.3`): Media names and preference labels.
 - **Body** (400, `12–14px`, `1.55`): Instructions and supporting copy.
 - **Label** (600, `9–12px`, normal tracking): Form labels, metadata, and status text.
@@ -182,6 +189,12 @@ Controls use soft, rounded corners (`8–11px`); larger preference surfaces use 
 - **Style:** A quiet top bar with a wordmark, two task views, and settings.
 - **Hover / Active:** Active view uses ivory text and a slim iris underline; secondary navigation remains muted.
 - **Narrow Windows:** Keep both task views accessible and reduce only secondary status text.
+
+### Wordmark & Mark
+- **Symbol:** A C-shaped collection frame with a small index tab; see the draft vector in `docs/brand/`.
+- **Lockup:** Lowercase Manrope wordmark beside the symbol, matching the desktop header.
+- **Application:** Use the standalone mark in compact desktop chrome and tray contexts; keep its blue-ink/iris/ivory contrast.
+- **Status:** First direction for owner review, not final trademark clearance.
 
 ### Playlist Row
 Each row preserves the playlist's order while presenting its title, duration, selection, and availability with generous vertical rhythm.

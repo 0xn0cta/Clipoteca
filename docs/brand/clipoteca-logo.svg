@@ -2,5 +2,5 @@
   <path d="M39 8.5H28.5a13.5 13.5 0 1 0 0 27H39" stroke="#B7A6E3" stroke-width="3.4" stroke-linecap="round"/>
   <path d="M32 15.5h10v13H32" stroke="#F0EEE9" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
   <path d="M36.5 15.5v4" stroke="#B7A6E3" stroke-width="2.4" stroke-linecap="round"/>
-  <text x="58" y="38" fill="#F0EEE9" font-family="Instrument Serif, Georgia, serif" font-size="34" letter-spacing="-0.7">clipoteca</text>
+  <text x="58" y="36" fill="#F0EEE9" font-family="Manrope, Segoe UI, sans-serif" font-size="27" font-weight="700" letter-spacing="-1.35">clipoteca</text>
 </svg>

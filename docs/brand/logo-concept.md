@@ -14,7 +14,7 @@ The mark combines a **C-shaped collection frame** with a small **index tab**. Th
 
 - Muted iris `#B7A6E3` carries the frame and index-tab accent.
 - Soft ivory `#F0EEE9` carries the inner item/frame detail and wordmark.
-- Wordmark uses the app’s Instrument Serif display family; the UI header loads the packaged font locally.
+- Wordmark uses the app’s Manrope family and bold weight for consistency with the refreshed interface.
 
 ## Usage
 
