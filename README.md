@@ -63,11 +63,14 @@ python main.py --dev
 
 ## Siguiente implementación
 
-1. Conectar el puente Python–React y analizar URLs con yt-dlp.
-2. Mostrar metadatos y selección real de elementos de playlists.
-3. Añadir la cola de descargas con progreso por elemento, cancelación, reintentos y recuperación.
-4. Implementar el selector de carpeta y las opciones de salida reales.
-5. Validar FFmpeg, licencias, empaquetado e instalador de Windows.
+La ruta completa, dependencias, criterios de aceptación y verificaciones están en:
+
+- [`AGENTS.md`](AGENTS.md): reglas para agentes colaboradores.
+- [`docs/IMPLEMENTATION_SPEC.md`](docs/IMPLEMENTATION_SPEC.md): flujos, contrato Python–React, estados, errores y límites.
+- [`tasks/plan.md`](tasks/plan.md): fases y checkpoints.
+- [`tasks/todo.md`](tasks/todo.md): tareas ejecutables `T01`–`T27`.
+
+El colaborador debe empezar en `T01`, trabajar una tarea por vez y mantener actualizadas sus casillas solo después de verificarla.
 
 ## Alcance responsable
 

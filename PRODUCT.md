@@ -29,16 +29,16 @@ The first release targets Windows. A user pastes a video or playlist URL, review
 ## Capabilities and Constraints
 
 - First release is for Windows; the interface is in Spanish.
-- The UI direction requested is modern and dark; detailed visual direction is to be established with Impeccable.
+- The UI is modern and dark; the approved visual direction is documented in `DESIGN.md`.
 - Support video, audio, or both: MP4 video and MP3 audio.
 - Prefer the best available quality by default, with a selector for available qualities.
-- Remember the destination folder and allow changing it for a download.
+- Use `Descargas/Clipoteca` as the initial destination, remember it, and allow changing it for a download.
 - Put playlist files in a subfolder named after the playlist.
 - Skip existing duplicate files and notify the user; do not silently overwrite.
-- Allow configurable download concurrency with no fixed application-imposed maximum, as requested. The default concurrency remains undecided.
+- Ask for the download concurrency on first launch, remember the choice, and allow changing it later. Do not impose an application-level maximum.
 - FFmpeg is planned to ship with the Windows installer; distribution licensing and notices must be checked before release.
 - Scope is limited to content the user owns or is authorized to download. No DRM circumvention or authentication/cookie import is in scope.
-- Retry and resume behavior, playlist failure recovery, and final installer details remain to be verified against the implementation plan.
+- Playlist failure recovery, cancellation/resume behavior, queue recovery after restart, and final installer details are specified for implementation and must be verified by tests.
 
 ## Brand Commitments
 
@@ -48,7 +48,7 @@ The first release targets Windows. A user pastes a video or playlist URL, review
 
 ## Evidence on Hand
 
-No existing product assets, user research, or visual implementation were present in the repository at project start.
+The current interface prototype lives in `frontend/src/` and its latest desktop screenshot is `docs/screenshots/clipoteca-desktop.png`. Playlist rows shown in the prototype are fictional demonstration data, not analyzed YouTube content. No user research or licensed media assets are on hand.
 
 ## Product Principles
 

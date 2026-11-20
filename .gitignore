@@ -2,9 +2,12 @@
 venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+.coverage
 
 frontend/node_modules/
 frontend/dist/
+frontend/coverage/
 
 .impeccable/config.local.json
 .impeccable/build/
