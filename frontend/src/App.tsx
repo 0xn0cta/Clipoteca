@@ -13,6 +13,7 @@ import {
   Settings2,
   X,
 } from 'lucide-react'
+import logoMark from './assets/clipoteca-mark.svg'
 import './App.css'
 
 type View = 'prepare' | 'queue'
@@ -75,7 +76,7 @@ function App() {
             onClick={() => setView('prepare')}
             aria-label="Clipoteca, preparar descarga"
           >
-            <BookOpen size={21} strokeWidth={1.6} aria-hidden="true" />
+            <img className="brand-mark" src={logoMark} alt="" aria-hidden="true" />
             <span>clipoteca</span>
           </button>
 
