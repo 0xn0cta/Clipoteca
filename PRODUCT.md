@@ -34,11 +34,18 @@ The first release targets Windows. A user pastes a video or playlist URL, review
 - Prefer the best available quality by default, with a selector for available qualities.
 - Remember the destination folder and allow changing it for a download.
 - Put playlist files in a subfolder named after the playlist.
+- Offer a selected-item preview before downloading, using artwork and direct audio/video playback when the source supports it; preview playback does not save a file.
+- Let users open a completed output from history with its Windows default application.
 - Skip existing duplicate files and notify the user; do not silently overwrite.
-- Allow configurable download concurrency with no fixed application-imposed maximum, as requested. The default concurrency remains undecided.
+- Allow manual download concurrency without a fixed application-imposed maximum. Automatic mode adapts to observed throughput and respects a user-selected ceiling; automatic mode is the default and its initial ceiling is five.
+- Keep completed items in a separate, manually clearable history. Failed items remain in the active queue for individual retries and stay linked to their original batch.
+- On close with queued or active downloads, offer continue-in-background (tray), pause-and-close (preserve partial files), or return to the app. The Windows tray can open the app, pause/resume, cancel, and exit.
+- Persist queue state locally and recover interrupted downloads as paused so the user can resume them. Cancellation removes only the incomplete temporary file; clearing history never deletes downloaded media.
+- Show user-facing Spanish errors and retain a local technical log for debugging.
 - FFmpeg is planned to ship with the Windows installer; distribution licensing and notices must be checked before release.
 - Scope is limited to content the user owns or is authorized to download. No DRM circumvention or authentication/cookie import is in scope.
-- Retry and resume behavior, playlist failure recovery, and final installer details remain to be verified against the implementation plan.
+- Automatic retry policy is three retries for transient errors; continue the batch after an item fails and leave failed items available for manual retry. Validate partial-file resume behavior against real sites during Windows testing.
+- FFmpeg packaging, licensing, and final Windows installer details remain to be verified.
 
 ## Brand Commitments
 

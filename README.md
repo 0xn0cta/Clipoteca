@@ -2,7 +2,7 @@
 
 Aplicación de escritorio para Windows para preparar y gestionar descargas autorizadas de videos y playlists. El proyecto prioriza la revisión de playlists y el estado de cada elemento.
 
-> **Estado actual:** primera entrega visual. La interfaz funciona con datos de demostración; el análisis real con `yt-dlp` y las descargas todavía no están conectados. No se inicia ninguna descarga desde esta versión.
+> **Estado actual:** primera integración funcional en desarrollo. El análisis y la cola usan `yt-dlp`; queda validar el flujo de descarga en Windows con enlaces de prueba autorizados y completar pruebas de bandeja/notificaciones.
 
 ![Vista de escritorio de Clipoteca](docs/screenshots/clipoteca-desktop.png)
 
@@ -10,8 +10,10 @@ Aplicación de escritorio para Windows para preparar y gestionar descargas autor
 
 - Python + [pywebview](https://pywebview.flowrl.com/) como ventana de escritorio.
 - React + TypeScript + Vite para la interfaz local.
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp) previsto como motor de descarga.
-- FFmpeg previsto para unir pistas y convertir audio a MP3. Su distribución y avisos de licencia deben revisarse antes de empaquetar.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) como motor de análisis y descarga.
+- FFmpeg para unir pistas y convertir audio a MP3. Debe estar instalado y accesible en `PATH`; su distribución y avisos de licencia deben revisarse antes de empaquetar.
+- SQLite local para conservar la cola, los resultados y las preferencias.
+- Icono de bandeja, controles en segundo plano y notificaciones de Windows.
 - La interfaz usa WebView2 en Windows.
 
 ## Requisitos de desarrollo
@@ -20,6 +22,7 @@ Aplicación de escritorio para Windows para preparar y gestionar descargas autor
 - Python 3.11 o superior.
 - Node.js y npm.
 - Microsoft Edge WebView2 Runtime para ejecutar la ventana de escritorio.
+- FFmpeg instalado en Windows para combinar pistas de vídeo o convertir audio a MP3.
 
 ## Ejecutar la interfaz en el navegador
 
@@ -29,7 +32,7 @@ npm install
 npm run dev
 ```
 
-Vite mostrará la dirección local de desarrollo. En esta modalidad, la interfaz es una previsualización y no descarga contenido.
+Vite mostrará la dirección local de desarrollo. En esta modalidad se previsualiza la interfaz, pero no está disponible el puente Python ni se descargan contenidos.
 
 ## Ejecutar en la ventana de escritorio
 
@@ -52,22 +55,32 @@ Para desarrollo con Vite Hot Module Replacement, ejecuta `npm run dev` dentro de
 python main.py --dev
 ```
 
-## Qué incluye esta primera entrega
+## Funcionalidades implementadas en esta fase
 
 - Interfaz oscura en español con dirección de diseño **Archivo personal premium**.
-- Preparación de lote con muestra de playlist claramente marcada como ficticia.
-- Selección de elementos disponibles, selección global, formato, calidad y destino en modo demostración.
-- Vista inicial de cola vacía.
-- Controles etiquetados y adaptaciones para ventanas más estrechas.
-- La acción de inicio permanece deshabilitada hasta que exista un motor de descarga real.
+- Análisis de URLs compatibles con yt-dlp y selección de elementos antes de descargarlos.
+- Previsualización de la selección con miniatura y reproducción de audio/vídeo cuando la fuente lo permite; la reproducción no guarda un archivo.
+- Descarga de vídeo MP4, audio MP3 o ambos; FFmpeg es necesario para unir pistas y convertir audio.
+- Cola persistente con progreso por elemento, pausa, reanudación, cancelación y hasta tres reintentos automáticos ante errores temporales.
+- Historial separado; limpiar el historial borra los registros de Clipoteca, no los archivos.
+- Apertura de los archivos finalizados desde el historial con la aplicación predeterminada de Windows.
+- Carpeta predeterminada `Descargas\Clipoteca`, recordada y modificable; las playlists crean una subcarpeta.
+- Modo de concurrencia automático con techo configurable (inicialmente 5) o modo manual sin máximo impuesto por Clipoteca.
+- Icono en los iconos ocultos de Windows para abrir, pausar/reanudar, cancelar o salir; las descargas pueden seguir en segundo plano.
+- Mensajes de estado en la app y registro técnico local.
 
-## Siguiente implementación
+El análisis y la descarga no importan cookies o credenciales. Los enlaces deben ser accesibles sin iniciar sesión. La compatibilidad varía según cada extractor y las condiciones del sitio.
 
-1. Conectar el puente Python–React y analizar URLs con yt-dlp.
-2. Mostrar metadatos y selección real de elementos de playlists.
-3. Añadir la cola de descargas con progreso por elemento, cancelación, reintentos y recuperación.
-4. Implementar el selector de carpeta y las opciones de salida reales.
-5. Validar FFmpeg, licencias, empaquetado e instalador de Windows.
+## Validación local
+
+```powershell
+python -m unittest discover -s tests -v
+cd frontend
+npm run build
+npm run lint
+```
+
+La descarga real, la reanudación de archivos parciales, el selector nativo y el icono de bandeja todavía necesitan una prueba manual en Windows con enlaces de prueba propios o autorizados. Los logs se guardan en `%LOCALAPPDATA%\Clipoteca\logs` y la base de datos local en `%LOCALAPPDATA%\Clipoteca`.
 
 ## Alcance responsable
 
