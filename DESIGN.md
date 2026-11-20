@@ -1,207 +1,201 @@
 ---
 name: Clipoteca
-description: A playlist-first desktop workspace for preparing authorized media downloads.
+description: A private, playlist-first archive for authorized media downloads.
 colors:
-  primary: "#E6A45F"
-  neutral-bg: "#111613"
-  sidebar-bg: "#141A16"
-  surface: "#1A211D"
-  surface-hover: "#202722"
-  border: "#2A332D"
-  border-strong: "#3A453D"
-  text-strong: "#F0F2ED"
-  text-primary: "#DCE1DC"
-  text-secondary: "#B3BDB4"
-  text-muted: "#99A49B"
-  text-faint: "#7C8980"
-  success: "#92BF9A"
-  ink-on-primary: "#211810"
+  primary: "#B7A6E3"
+  neutral-bg: "#131621"
+  ink-raised: "#171B27"
+  surface: "#1B202D"
+  surface-raised: "#222736"
+  border: "#303545"
+  border-strong: "#414658"
+  text-primary: "#F0EEE9"
+  text-secondary: "#C5C3CC"
+  text-muted: "#A1A1AF"
+  success: "#9AC8B4"
+  unavailable: "#C994A2"
+  text-on-primary: "#211D2A"
 typography:
   display:
-    fontFamily: "Barlow, Segoe UI, sans-serif"
-    fontSize: "clamp(28px, 2.4vw, 36px)"
-    fontWeight: 650
-    lineHeight: 1.05
-    letterSpacing: "-0.045em"
-  body:
-    fontFamily: "Barlow, Segoe UI, sans-serif"
-    fontSize: "13px"
+    fontFamily: "Instrument Serif, Georgia, serif"
+    fontSize: "clamp(42px, 4.8vw, 60px)"
     fontWeight: 400
-    lineHeight: 1.45
+    lineHeight: 0.98
+    letterSpacing: "-0.035em"
+  body:
+    fontFamily: "Manrope, Segoe UI, sans-serif"
+    fontSize: "14px"
+    fontWeight: 400
+    lineHeight: 1.55
   label:
-    fontFamily: "Barlow, Segoe UI, sans-serif"
-    fontSize: "9px"
-    fontWeight: 700
-    letterSpacing: "0.12em"
+    fontFamily: "Manrope, Segoe UI, sans-serif"
+    fontSize: "10px"
+    fontWeight: 600
 rounded:
-  xs: "3px"
-  sm: "4px"
-  md: "6px"
-  lg: "9px"
-spacing:
-  xs: "4px"
   sm: "8px"
-  md: "12px"
+  md: "11px"
   lg: "16px"
-  xl: "24px"
+  pill: "100px"
+spacing:
+  xs: "5px"
+  sm: "10px"
+  md: "16px"
+  lg: "22px"
+  xl: "34px"
 components:
   button-primary:
     backgroundColor: "{colors.primary}"
-    textColor: "{colors.ink-on-primary}"
+    textColor: "{colors.text-on-primary}"
     rounded: "{rounded.sm}"
-    padding: "0 12px"
-    height: "36px"
+    padding: "0 16px"
+    height: "40px"
   input-url:
-    backgroundColor: "{colors.sidebar-bg}"
-    textColor: "{colors.text-strong}"
-    rounded: "{rounded.md}"
-    padding: "0 14px"
-    height: "49px"
-  nav-active:
-    backgroundColor: "{colors.surface-hover}"
-    textColor: "{colors.text-strong}"
-    rounded: "{rounded.md}"
-    padding: "0 11px"
-    height: "42px"
-  demo-chip:
-    backgroundColor: "#2A241D"
-    textColor: "#E4B981"
-    rounded: "{rounded.xs}"
-    padding: "3px 5px"
-  playlist-row:
-    backgroundColor: "#1B241F"
+    backgroundColor: "{colors.ink-raised}"
     textColor: "{colors.text-primary}"
-    height: "53px"
-  format-option:
-    backgroundColor: "#171D19"
-    textColor: "{colors.text-muted}"
-    rounded: "{rounded.xs}"
-    height: "47px"
-  output-rail:
+    rounded: "{rounded.md}"
+    padding: "0 15px"
+    height: "54px"
+  nav-active:
+    textColor: "{colors.text-primary}"
+    height: "76px"
+  sample-chip:
+    backgroundColor: "#211F2A"
+    textColor: "#C7B8E7"
+    rounded: "{rounded.pill}"
+    padding: "5px 9px"
+  preferences-panel:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.text-primary}"
-    rounded: "{rounded.md}"
-    padding: "17px 16px"
+    rounded: "{rounded.lg}"
+    padding: "23px"
+  playlist-row:
+    backgroundColor: "{colors.surface}"
+    textColor: "{colors.text-primary}"
+    height: "71px"
+  format-option:
+    backgroundColor: "#2B2737"
+    textColor: "#E1D6F4"
+    rounded: "{rounded.sm}"
+    height: "50px"
 ---
 
 # Design System: Clipoteca
 
 ## Overview
 
-**Creative North Star: "The Media Ingest Workbench"**
+**Creative North Star: "The Private Collection Archive"**
 
-Clipoteca treats every URL as a batch that can be inspected and managed. The interface borrows the clarity of a media-ingest ledger: ordered entries, visible status, explicit output controls, and no hidden steps. Its dark appearance is grounded in a Windows desktop work session, not in a generic “tech” aesthetic.
+Clipoteca feels like a carefully kept personal media collection, not a broadcast console or an industrial control surface. The interface gives the source URL a clear place, then lets the playlist read like a considered catalogue: roomy rows, quiet metadata, and unmistakable choices.
 
-Graphite-green surfaces and fine rules keep the manifest readable; warm signal orange marks the active choice and primary action. The system is dense enough to make playlist work practical, but every state remains legible and honest. Demonstration content is labeled as such until a real source is analyzed.
+The dark blue-ink setting remains calm rather than dramatic. Instrument Serif brings an editorial note to the main titles; Manrope keeps controls and media details direct. Muted iris marks the selected state and the primary action without turning the whole screen into an accent-colored dashboard.
 
 **Key Characteristics:**
-- Playlist ledger before decorative media cards.
-- Dark graphite-green planes with fine structural divisions.
-- Signal orange reserved for active and actionable states.
-- Clear, numbered media rows and tabular durations.
-- Prototype and availability states are explicit.
+- Personal archive mood with an editorial display voice.
+- Dark blue-ink surfaces and soft ivory text.
+- Muted iris accent for selected and primary states.
+- Playlist rows remain explicit, ordered, and easy to scan.
+- Prototype content and unavailable items are clearly disclosed.
 
 ## Colors
 
-The palette pairs a green-black desktop ground with a warm amber-orange signal and a restrained green success state.
+The palette uses deep blue ink, soft ivory type, a restrained iris accent, and quiet status colors.
 
 ### Primary
-- **Signal Orange** (`#E6A45F`): Active navigation, selected formats, and the primary analysis action.
+- **Muted Iris** (`#B7A6E3`): Active navigation, selected formats, checked items, and the main analysis action.
 
 ### Secondary
-- **Quiet Success Green** (`#92BF9A`): Available and successful media states.
+- **Quiet Success Mint** (`#9AC8B4`): Available items and successful states.
+- **Muted Rose** (`#C994A2`): Unavailable items and errors that need attention.
 
 ### Neutral
-- **Green-Black Ground** (`#111613`): Main application canvas.
-- **Sidebar Green-Black** (`#141A16`): Persistent navigation rail.
-- **Workbench Surface** (`#1A211D`): Output rail and contained controls.
-- **Raised Surface** (`#202722`): Hover and active navigation surfaces.
-- **Fine Rule** (`#2A332D`): Quiet separators between related regions.
-- **Structural Rule** (`#3A453D`): Panel outlines and stronger boundaries.
-- **Primary Ink** (`#F0F2ED`): Main headings and the most important labels.
-- **Body Ink** (`#DCE1DC`): Primary content such as media titles.
-- **Secondary Ink** (`#B3BDB4`): Supporting descriptions.
-- **Muted Ink** (`#99A49B`): Lower-priority labels and values.
-- **Faint Ink** (`#7C8980`): Metadata and tertiary guidance.
+- **Blue-Ink Ground** (`#131621`): Main application canvas.
+- **Raised Ink** (`#171B27`): Inset source and preference controls.
+- **Collection Surface** (`#1B202D`): Preference panel and grouped work areas.
+- **Lifted Surface** (`#222736`): Hover and transient surfaces.
+- **Fine Border** (`#303545`): Quiet structural separation.
+- **Strong Border** (`#414658`): Input boundaries and panel outlines.
+- **Soft Ivory** (`#F0EEE9`): Main titles and item names.
+- **Warm Secondary Ink** (`#C5C3CC`): Supporting descriptions and important metadata.
+- **Muted Ink** (`#A1A1AF`): Secondary labels and guidance.
 
-**The Signal Rarity Rule.** Orange belongs to a selected state, a primary action, or a meaningful status—not to decoration.
+**The Iris Restraint Rule.** Muted iris marks an action or a selected state; it does not decorate every surface.
 
 ## Typography
 
-**Display Font:** Barlow (with Segoe UI, sans-serif fallback)
+**Display Font:** Instrument Serif (with Georgia, serif fallback)
 
-**Body Font:** Barlow (with Segoe UI, sans-serif fallback)
-**Label/Mono Font:** Barlow; tabular numerals are used for durations and counts.
+**Body Font:** Manrope (with Segoe UI, sans-serif fallback)
+**Label/Mono Font:** Manrope; tabular numerals are used for durations and counts.
 
-**Character:** Barlow keeps operational information compact without making it feel like code. Weight and scale, rather than a second display family, establish hierarchy.
+**Character:** Instrument Serif gives the collection a quiet editorial voice. Manrope keeps operational choices crisp and familiar, so the premium tone never makes the controls feel precious.
 
 ### Hierarchy
-- **Display** (650, `clamp(28px, 2.4vw, 36px)`, `1.05`): Main page title.
-- **Headline** (650, `18px`, `1.2`): Empty-state and secondary view headings.
-- **Title** (650, `15px`, `1.2`): Workbench section titles.
-- **Body** (400, `13px`, `1.45`): Supporting instructions and descriptions.
-- **Label** (700, `9–11px`, tracked): Form labels, metadata, and state markers; uppercase is reserved for compact utility labels.
+- **Display** (400, `clamp(42px, 4.8vw, 60px)`, `0.98`): Main page title.
+- **Headline** (400, `30px`, `1`): Playlist and empty-state headings.
+- **Title** (600, `12–14px`, `1.3`): Media names and preference labels.
+- **Body** (400, `12–14px`, `1.55`): Instructions and supporting copy.
+- **Label** (600, `9–12px`, normal tracking): Form labels, metadata, and status text.
 
 ## Layout
 
-The desktop workspace uses a persistent left rail, a flexible source-and-manifest area, and a narrow output rail. At the first screen, URL, playlist, and output settings are visible together. The download action anchors the lower edge without obscuring the manifest.
+The desktop surface has a quiet top navigation and a centered work area. The source field spans the page; below it, the playlist occupies the broad column and collection preferences sit beside it. The selected-item action is separated at the bottom rather than mixed into the playlist.
 
-The playlist is a ledger, not a grid of equal cards. Number, title, duration, selection, and availability align in rows; rules separate entries. At narrow widths the output controls stack below the playlist and each row reflows while retaining its status. The desktop rail collapses to an icon rail around `1020px`, and the compact navigation moves to the top around `620px`.
+Playlist rows retain title, duration, selection, and status. On narrow windows, rows stack metadata beneath the title and preferences move below the list; the source and action remain easy to find. The main content uses a centered maximum width, with the desktop grid collapsing at `850px` and the compact navigation treatment at `620px`.
 
-Spacing is compact inside controls and rows, with larger breaks between the source, manifest, and output regions. The established working steps are multiples or close neighbors of `4px` (`4`, `8`, `12`, `16`, and `24px`).
+Spacing is generous between the page title, source, playlist, and preference panel. Controls stay grouped; content lists use quiet row dividers rather than dense grids.
 
 ## Elevation & Depth
 
-The system is primarily flat. Depth comes from tonal surface shifts and fine borders, not floating cards or glows. A soft, offset shadow is limited to transient notices that must separate from the work area.
+The interface relies on tonal surface changes, soft corners, and fine borders. It avoids floating stacks and decorative glows. A soft shadow is reserved for transient notices.
 
-**The Flat-By-Default Rule.** A control is raised only when its interaction or temporary status needs separation.
+**The Quiet Surface Rule.** Panels are distinguished by one tonal step and one outline; do not nest containers to manufacture hierarchy.
 
 ## Shapes
 
-Corners stay restrained: small radii on controls, slightly larger radii on panels, and mostly square ledger rows. The active navigation marker is a narrow structural signal; list rows use a full-row state tint rather than a thick colored side border.
+Controls use soft, rounded corners (`8–11px`); larger preference surfaces use a calm `16px` radius. Navigation uses a simple underline, and selected formats use a quiet inset surface rather than a dense segmented-console treatment.
 
 ## Components
 
 ### Buttons
-- **Shape:** Compact corners (`4px`); primary actions use the signal color.
-- **Primary:** Warm orange with dark ink, short action copy, and a clear disabled state.
-- **Hover / Focus:** A small color lift on hover; keyboard focus uses a visible two-pixel outline offset from the control.
-- **Secondary / Ghost:** Transparent at rest; text and border strengthen on hover.
+- **Shape:** Softly rounded (`8px`) for actions; pill silhouette for the disabled final action.
+- **Primary:** Muted iris with dark ink, clear verbs, and a visible icon where it aids recognition.
+- **Hover / Focus:** A slight upward shift on the primary action; focus uses a clear two-pixel outline offset from the control.
+- **Secondary / Ghost:** Text-only at rest; color strengthens on hover.
 
 ### Chips
-- **Style:** Small, squared labels with a thin border and restrained warm text.
-- **State:** “Datos de muestra” and prototype markers disclose demo content; they do not impersonate availability or progress.
+- **Style:** Quiet pill labels with a low-contrast border and muted iris text.
+- **State:** “Muestra” labels synthetic content; it does not stand in for download progress or availability.
 
 ### Cards / Containers
-- **Corner Style:** Output rail uses a restrained `6px` radius.
-- **Background:** One workbench surface above the main ground.
-- **Shadow Strategy:** Flat at rest; no nested cards.
-- **Border:** One structural outline and internal rules for sections.
-- **Internal Padding:** Approximately `16px`.
+- **Corner Style:** `16px` for the collection-preferences surface.
+- **Background:** One tonal step above the page ground.
+- **Shadow Strategy:** Flat at rest; only transient notices lift.
+- **Border:** Fine, low-contrast outline.
+- **Internal Padding:** Approximately `22px`.
 
 ### Inputs / Fields
-- **Style:** Dark inset field, fine structural border, `6px` radius.
-- **Focus:** Border shifts toward the signal color with a visible focus outline.
-- **Error / Disabled:** Errors name the needed recovery; disabled controls remain visibly subdued and explain why where possible.
+- **Style:** Inset blue-ink field with a subtle border and `11px` corners.
+- **Focus:** Border shifts toward muted iris; keyboard focus remains visible.
+- **Error / Disabled:** Keep controls legible, name the state, and explain the next action.
 
 ### Navigation
-- **Style:** Persistent dark rail, Barlow labels, thin active marker, and a tonal active surface.
-- **Hover / Active:** Hover brightens the surface; active navigation uses the signal color only for its icon and marker.
-- **Narrow Windows:** Labels collapse to icons before the rail moves above the content.
+- **Style:** A quiet top bar with a wordmark, two task views, and settings.
+- **Hover / Active:** Active view uses ivory text and a slim iris underline; secondary navigation remains muted.
+- **Narrow Windows:** Keep both task views accessible and reduce only secondary status text.
 
-### Playlist Ledger
-Ordered media entries align selection, sequence number, title, duration, and availability. On narrow screens the same information reflows into a compact row; status must not be clipped.
+### Playlist Row
+Each row preserves the playlist's order while presenting its title, duration, selection, and availability with generous vertical rhythm.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** label synthetic playlist data and unconnected functionality as a prototype.
-- **Do** keep media order and item-level availability visible.
-- **Do** keep the source, manifest, and output options close enough to compare at a glance.
-- **Do** use the signal color only for actions, selections, and meaningful states.
+- **Do** make the source URL and primary analysis action the first clear task.
+- **Do** give playlist titles room to breathe and keep duration and availability aligned.
+- **Do** identify sample content and unimplemented actions honestly.
+- **Do** use muted iris for focus and selection, not for broad decoration.
 
 ### Don't:
-- **Don't** present sample metadata as if it came from an analyzed URL.
-- **Don't** imply a setting is saved when it is only a visual placeholder.
-- **Don't** replace playlist rows with equal-sized content cards.
-- **Don't** hide or truncate availability status on narrow windows.
+- **Don't** return to the previous dense industrial-console composition.
+- **Don't** use poster-wall browsing as the default playlist layout.
+- **Don't** make editorial typography smaller or denser than operational text can support.
+- **Don't** imply sample metadata or destination settings are already saved.

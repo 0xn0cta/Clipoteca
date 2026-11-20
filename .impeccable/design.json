@@ -1,84 +1,80 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-11-20T18:40:00Z",
+  "generatedAt": "2026-11-20T18:52:00Z",
   "title": "Design System: Clipoteca",
   "extensions": {
     "colorMeta": {
       "primary": {
         "role": "primary",
-        "displayName": "Signal Orange",
-        "canonical": "#E6A45F",
+        "displayName": "Muted Iris",
+        "canonical": "#B7A6E3",
         "tonalRamp": [
-          "#402613",
-          "#673D1F",
-          "#8E562B",
-          "#B87037",
-          "#D58D4D",
-          "#E6A45F",
-          "#EFBD83",
-          "#F7DEC0"
+          "#211D2A",
+          "#342D45",
+          "#49405F",
+          "#60577A",
+          "#7D7399",
+          "#9B8DBA",
+          "#B7A6E3",
+          "#E3D9F5"
         ]
       },
       "neutral-bg": {
         "role": "neutral",
-        "displayName": "Green-Black Ground",
-        "canonical": "#111613",
+        "displayName": "Blue-Ink Ground",
+        "canonical": "#131621",
         "tonalRamp": [
-          "#111613",
-          "#141A16",
-          "#1A211D",
-          "#202722",
-          "#2A332D",
-          "#3A453D",
-          "#7C8980",
-          "#F0F2ED"
+          "#131621",
+          "#171B27",
+          "#1B202D",
+          "#222736",
+          "#303545",
+          "#414658",
+          "#A1A1AF",
+          "#F0EEE9"
         ]
       }
     },
     "typographyMeta": {
       "display": {
-        "displayName": "Barlow Display",
-        "purpose": "Main page title and empty-state headings."
+        "displayName": "Instrument Serif",
+        "purpose": "Main title and collection headings."
       },
       "body": {
-        "displayName": "Barlow",
-        "purpose": "Operational descriptions and playlist titles."
+        "displayName": "Manrope",
+        "purpose": "Navigation, descriptions, and media details."
       },
       "label": {
-        "displayName": "Barlow Utility",
-        "purpose": "Compact field labels and state markers."
+        "displayName": "Manrope Utility",
+        "purpose": "Field labels, statuses, and small metadata."
       }
     },
     "shadows": [
       {
         "name": "notice-float",
-        "value": "0 8px 28px rgb(0 0 0 / 28%)",
-        "purpose": "Separate transient notices from the work area."
+        "value": "0 10px 30px rgb(0 0 0 / 26%)",
+        "purpose": "Separate a transient notice from the collection work area."
       }
     ],
     "motion": [
       {
         "name": "control-state",
-        "value": "140ms ease",
-        "purpose": "Short hover and active-state changes."
+        "value": "150ms ease",
+        "purpose": "Subtle selection and hover changes."
       },
       {
         "name": "notice-arrival",
         "value": "220ms cubic-bezier(0.16, 1, 0.3, 1)",
-        "purpose": "A single, quick notice entrance."
+        "purpose": "A brief upward settle for a transient notice."
       }
     ],
     "breakpoints": [
       {
-        "name": "wide",
-        "value": "1240px"
+        "name": "tablet",
+        "value": "1080px"
       },
       {
-        "name": "icon-rail",
-        "value": "1020px"
-      },
-      {
-        "name": "stacked-output",
+        "name": "stacked-options",
         "value": "850px"
       },
       {
@@ -89,95 +85,95 @@
   },
   "components": [
     {
-      "name": "Primary Action",
+      "name": "Primary Analysis Action",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "Warm signal action for analyzing a source.",
-      "html": "<button class=\"ds-button-primary\" type=\"button\">Analizar enlace</button>",
-      "css": ".ds-button-primary { display: inline-flex; align-items: center; min-height: 36px; padding: 0 12px; border: 1px solid #C17D3E; border-radius: 4px; background: #E6A45F; color: #211810; font: 700 11px Barlow, sans-serif; cursor: pointer; transition: background-color 140ms ease, transform 140ms ease; } .ds-button-primary:hover { border-color: #F0B36F; background: #F0B36F; } .ds-button-primary:focus-visible { outline: 2px solid #EFBD83; outline-offset: 3px; } .ds-button-primary:active { transform: translateY(1px); }"
+      "description": "Muted-iris action for analyzing a source URL.",
+      "html": "<button class=\"ds-primary-action\" type=\"button\">Analizar enlace</button>",
+      "css": ".ds-primary-action { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 40px; padding: 0 16px; border: 1px solid #D1C2EE; border-radius: 8px; background: #B7A6E3; color: #211D2A; font: 700 11px Manrope, sans-serif; cursor: pointer; transition: transform 160ms ease, background-color 160ms ease; } .ds-primary-action:hover { background: #D7C9F0; transform: translateY(-1px); } .ds-primary-action:focus-visible { outline: 2px solid #D7C9F0; outline-offset: 3px; }"
     },
     {
-      "name": "URL Field",
+      "name": "Source URL Field",
       "kind": "input",
       "refersTo": "input-url",
-      "description": "Dark inset field for a video or playlist URL.",
-      "html": "<label class=\"ds-url-field\"><span class=\"ds-url-label\">URL del video o playlist</span><input placeholder=\"Pega aquí un enlace de YouTube\" /></label>",
-      "css": ".ds-url-field { display: flex; align-items: center; min-height: 49px; padding: 0 14px; border: 1px solid #3A453D; border-radius: 6px; background: #141A16; color: #F0F2ED; } .ds-url-field input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: inherit; font: 400 12px Barlow, sans-serif; } .ds-url-field input::placeholder { color: #8E9890; opacity: 1; } .ds-url-field:focus-within { border-color: #98744C; } .ds-url-field:focus-within input:focus-visible { outline: 0; }"
+      "description": "Inset source field with clear URL affordance.",
+      "html": "<label class=\"ds-source-field\"><span>Enlace de video o playlist</span><input placeholder=\"Pega aquí un enlace de YouTube\" /></label>",
+      "css": ".ds-source-field { display: flex; align-items: center; min-height: 54px; padding: 0 15px; border: 1px solid #414658; border-radius: 11px; background: #171B27; color: #F0EEE9; } .ds-source-field input { min-width: 0; width: 100%; border: 0; outline: 0; background: transparent; color: inherit; font: 400 13px Manrope, sans-serif; } .ds-source-field input::placeholder { color: #9695A2; opacity: 1; } .ds-source-field:focus-within { border-color: #8B7CA9; } .ds-source-field input:focus-visible { outline: 0; }"
     },
     {
       "name": "Active Navigation",
       "kind": "nav",
       "refersTo": "nav-active",
-      "description": "Tonal active state with a narrow orange marker.",
+      "description": "Quiet top navigation with an iris underline.",
       "html": "<button class=\"ds-nav-active\" type=\"button\" aria-current=\"page\">Preparar</button>",
-      "css": ".ds-nav-active { position: relative; display: flex; align-items: center; min-height: 42px; padding: 0 11px; border: 1px solid #3B443E; border-radius: 6px; background: #202722; color: #F0F2ED; font: 600 13px Barlow, sans-serif; } .ds-nav-active::before { position: absolute; left: -1px; top: 10px; bottom: 10px; width: 2px; content: ''; background: #E6A45F; } .ds-nav-active:focus-visible { outline: 2px solid #EFBD83; outline-offset: 3px; }"
+      "css": ".ds-nav-active { position: relative; display: inline-flex; align-items: center; height: 76px; padding: 0 2px; border: 0; background: transparent; color: #F0EEE9; font: 600 12px Manrope, sans-serif; } .ds-nav-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; border-radius: 2px 2px 0 0; background: #B7A6E3; content: ''; } .ds-nav-active:focus-visible { outline: 2px solid #D7C9F0; outline-offset: 3px; }"
     },
     {
-      "name": "Demonstration Label",
+      "name": "Sample Label",
       "kind": "chip",
-      "refersTo": "demo-chip",
-      "description": "Labels synthetic content so it cannot be mistaken for analyzed media.",
-      "html": "<span class=\"ds-demo-chip\">DATOS DE MUESTRA</span>",
-      "css": ".ds-demo-chip { display: inline-flex; padding: 3px 5px; border: 1px solid #57442F; border-radius: 3px; color: #E4B981; font: 700 8px Barlow, sans-serif; letter-spacing: 0.12em; }"
+      "refersTo": "sample-chip",
+      "description": "Soft pill disclosing synthetic playlist content.",
+      "html": "<span class=\"ds-sample-chip\">Muestra</span>",
+      "css": ".ds-sample-chip { display: inline-flex; align-items: center; padding: 5px 9px; border: 1px solid #494356; border-radius: 100px; background: #211F2A; color: #C7B8E7; font: 600 9px Manrope, sans-serif; }"
     },
     {
-      "name": "Output Rail",
+      "name": "Preferences Surface",
       "kind": "card",
-      "refersTo": "output-rail",
-      "description": "One flat panel for format, quality, destination, and batch summary.",
-      "html": "<aside class=\"ds-output-rail\"><h2>Salida</h2><p>Opciones del lote</p></aside>",
-      "css": ".ds-output-rail { min-width: 0; padding: 17px 16px 14px; border: 1px solid #3A453D; border-radius: 6px; background: #1A211D; color: #DCE1DC; } .ds-output-rail h2 { margin: 0; color: #F0F2ED; font: 650 15px Barlow, sans-serif; } .ds-output-rail p { margin: 4px 0 0; color: #7C8980; font: 400 11px/1.45 Barlow, sans-serif; }"
+      "refersTo": "preferences-panel",
+      "description": "Single contained area for format, quality, and destination.",
+      "html": "<aside class=\"ds-preferences\"><h2>Preferencias</h2><p>Para esta colección</p></aside>",
+      "css": ".ds-preferences { padding: 23px; border: 1px solid #303545; border-radius: 16px; background: #1B202D; color: #F0EEE9; } .ds-preferences h2 { margin: 0; font: 400 26px/1 Instrument Serif, Georgia, serif; } .ds-preferences p { margin: 7px 0 0; color: #A1A1AF; font: 400 11px/1.5 Manrope, sans-serif; }"
     },
     {
-      "name": "Playlist Ledger Row",
+      "name": "Playlist Row",
       "kind": "custom",
       "refersTo": "playlist-row",
-      "description": "Ordered row that keeps selection and availability legible.",
-      "html": "<div class=\"ds-ledger-row\"><span class=\"ds-ledger-number\">01</span><strong>Video de muestra</strong><span class=\"ds-ledger-duration\">08:24</span><span class=\"ds-ledger-status\">Disponible</span></div>",
-      "css": ".ds-ledger-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) 64px 100px; align-items: center; min-height: 53px; border-top: 1px solid #29312C; color: #DCE1DC; font: 500 12px Barlow, sans-serif; } .ds-ledger-row:hover { background: #1B221E; } .ds-ledger-number, .ds-ledger-duration { color: #99A49B; font-variant-numeric: tabular-nums; } .ds-ledger-status { color: #92BF9A; font-size: 10px; }"
+      "description": "Spacious row that keeps order, duration, and status aligned.",
+      "html": "<div class=\"ds-playlist-row\"><strong>Video de muestra</strong><span>08:24</span><span class=\"ds-status\">Disponible</span></div>",
+      "css": ".ds-playlist-row { display: grid; grid-template-columns: minmax(0, 1fr) 88px 118px; align-items: center; min-height: 71px; border-top: 1px solid #2B2E3B; color: #F0EEE9; font: 500 13px Manrope, sans-serif; } .ds-playlist-row:hover { background: rgb(255 255 255 / 2.5%); } .ds-playlist-row > span { color: #C5C3CC; font-size: 11px; } .ds-playlist-row .ds-status { color: #C5C3CC; font-size: 10px; } .ds-playlist-row .ds-status::before { display: inline-block; width: 6px; height: 6px; margin-right: 7px; border-radius: 50%; background: #9AC8B4; content: ''; }"
     },
     {
-      "name": "Format Selector",
+      "name": "Selected Format",
       "kind": "custom",
       "refersTo": "format-option",
-      "description": "Compact segmented choice with a clear active edge.",
+      "description": "Softly selected choice inside the format group.",
       "html": "<button class=\"ds-format-option\" type=\"button\" aria-pressed=\"true\">Video <small>MP4</small></button>",
-      "css": ".ds-format-option { display: grid; place-content: center; gap: 2px; min-height: 47px; border: 1px solid #3A453D; background: #171D19; color: #99A49B; font: 600 10px Barlow, sans-serif; cursor: pointer; } .ds-format-option:hover { background: #202722; color: #DCE1DC; } .ds-format-option[aria-pressed='true'] { background: #34291E; color: #F3D2A8; box-shadow: inset 0 -2px 0 #E6A45F; } .ds-format-option:focus-visible { outline: 2px solid #EFBD83; outline-offset: 2px; }"
+      "css": ".ds-format-option { display: grid; place-content: center; gap: 3px; min-height: 50px; border: 1px solid #4A435E; border-radius: 8px; background: #2B2737; color: #E1D6F4; font: 600 11px Manrope, sans-serif; cursor: pointer; } .ds-format-option small { color: inherit; font-size: 9px; opacity: 0.8; } .ds-format-option:hover { background: #342F42; } .ds-format-option:focus-visible { outline: 2px solid #D7C9F0; outline-offset: 2px; }"
     }
   ],
   "narrative": {
-    "northStar": "The Media Ingest Workbench",
-    "overview": "Clipoteca treats every URL as a batch that can be inspected and managed. The interface borrows the clarity of a media-ingest ledger: ordered entries, visible status, explicit output controls, and no hidden steps. Its dark appearance is grounded in a Windows desktop work session, not in a generic “tech” aesthetic.\n\nGraphite-green surfaces and fine rules keep the manifest readable; warm signal orange marks the active choice and primary action. The system is dense enough to make playlist work practical, but every state remains legible and honest. Demonstration content is labeled as such until a real source is analyzed.",
+    "northStar": "The Private Collection Archive",
+    "overview": "Clipoteca feels like a carefully kept personal media collection, not a broadcast console or an industrial control surface. The interface gives the source URL a clear place, then lets the playlist read like a considered catalogue: roomy rows, quiet metadata, and unmistakable choices.\n\nThe dark blue-ink setting remains calm rather than dramatic. Instrument Serif brings an editorial note to the main titles; Manrope keeps controls and media details direct. Muted iris marks the selected state and the primary action without turning the whole screen into an accent-colored dashboard.",
     "keyCharacteristics": [
-      "Playlist ledger before decorative media cards.",
-      "Dark graphite-green planes with fine structural divisions.",
-      "Signal orange reserved for active and actionable states.",
-      "Clear, numbered media rows and tabular durations.",
-      "Prototype and availability states are explicit."
+      "Personal archive mood with an editorial display voice.",
+      "Dark blue-ink surfaces and soft ivory text.",
+      "Muted iris accent for selected and primary states.",
+      "Playlist rows remain explicit, ordered, and easy to scan.",
+      "Prototype content and unavailable items are clearly disclosed."
     ],
     "rules": [
       {
-        "name": "The Signal Rarity Rule",
-        "body": "Orange belongs to a selected state, a primary action, or a meaningful status—not to decoration.",
+        "name": "The Iris Restraint Rule",
+        "body": "Muted iris marks an action or a selected state; it does not decorate every surface.",
         "section": "colors"
       },
       {
-        "name": "The Flat-By-Default Rule",
-        "body": "A control is raised only when its interaction or temporary status needs separation.",
+        "name": "The Quiet Surface Rule",
+        "body": "Panels are distinguished by one tonal step and one outline; do not nest containers to manufacture hierarchy.",
         "section": "elevation"
       }
     ],
     "dos": [
-      "Do label synthetic playlist data and unconnected functionality as a prototype.",
-      "Do keep media order and item-level availability visible.",
-      "Do keep the source, manifest, and output options close enough to compare at a glance.",
-      "Do use the signal color only for actions, selections, and meaningful states."
+      "Do make the source URL and primary analysis action the first clear task.",
+      "Do give playlist titles room to breathe and keep duration and availability aligned.",
+      "Do identify sample content and unimplemented actions honestly.",
+      "Do use muted iris for focus and selection, not for broad decoration."
     ],
     "donts": [
-      "Don't present sample metadata as if it came from an analyzed URL.",
-      "Don't imply a setting is saved when it is only a visual placeholder.",
-      "Don't replace playlist rows with equal-sized content cards.",
-      "Don't hide or truncate availability status on narrow windows."
+      "Don't return to the previous dense industrial-console composition.",
+      "Don't use poster-wall browsing as the default playlist layout.",
+      "Don't make editorial typography smaller or denser than operational text can support.",
+      "Don't imply sample metadata or destination settings are already saved."
     ]
   }
 }

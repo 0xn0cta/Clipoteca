@@ -1,34 +1,36 @@
-@import '@fontsource/barlow/400.css';
-@import '@fontsource/barlow/500.css';
-@import '@fontsource/barlow/600.css';
-@import '@fontsource/barlow/700.css';
+@import '@fontsource/instrument-serif/400.css';
+@import '@fontsource/instrument-serif/400-italic.css';
+@import '@fontsource/manrope/400.css';
+@import '@fontsource/manrope/500.css';
+@import '@fontsource/manrope/600.css';
+@import '@fontsource/manrope/700.css';
 
 :root {
-  font-family: 'Barlow', 'Segoe UI', sans-serif;
+  font-family: var(--body-font);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-optical-sizing: auto;
 
-  color: #e5e8e3;
-  background: #111613;
+  color: #F0EEE9;
+  background: #131621;
   color-scheme: dark;
 
-  --bg: #111613;
-  --sidebar: #141a16;
-  --surface: #1a211d;
-  --surface-hover: #202722;
-  --line: #2a332d;
-  --line-strong: #3a453d;
-  --text-strong: #f0f2ed;
-  --text-primary: #dce1dc;
-  --text-secondary: #b3bdb4;
-  --text-muted: #99a49b;
-  --text-faint: #7c8980;
-  --signal: #e6a45f;
-  --warning: #e6a45f;
-  --success: #92bf9a;
+  --ink: #131621;
+  --ink-raised: #171B27;
+  --surface: #1B202D;
+  --surface-raised: #222736;
+  --line: #303545;
+  --line-strong: #414658;
+  --text: #F0EEE9;
+  --text-secondary: #C5C3CC;
+  --text-muted: #A1A1AF;
+  --iris: #B7A6E3;
+  --muted-lilac: #C3B5E5;
+  --success: #9AC8B4;
+  --rose-muted: #C994A2;
+  --display-font: 'Instrument Serif', Georgia, serif;
+  --body-font: 'Manrope', 'Segoe UI', sans-serif;
 
   font-size: 14px;
   font-weight: 400;
@@ -41,8 +43,8 @@
 html {
   min-width: 360px;
   min-height: 100%;
-  background: var(--bg);
-  scrollbar-color: #455148 #141a16;
+  background: var(--ink);
+  scrollbar-color: #4A4D5D #171B27;
   scrollbar-width: thin;
 }
 
@@ -50,19 +52,19 @@ body {
   min-width: 360px;
   min-height: 100vh;
   margin: 0;
-  background: var(--bg);
+  background: var(--ink);
 }
 
 ::selection {
-  background: #7a5a39;
-  color: #fff5e8;
+  background: #655782;
+  color: #F7F4FB;
 }
 
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid #efbd83;
+  outline: 2px solid #D7C9F0;
   outline-offset: 3px;
 }
 
@@ -76,21 +78,15 @@ button:disabled {
 }
 
 ::-webkit-scrollbar-track {
-  background: #141a16;
+  background: #171B27;
 }
 
 ::-webkit-scrollbar-thumb {
-  border: 2px solid #141a16;
+  border: 2px solid #171B27;
   border-radius: 10px;
-  background: #455148;
+  background: #4A4D5D;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #59665c;
-}
-
-@media (max-width: 620px) {
-  :root {
-    font-size: 13px;
-  }
+  background: #5A5D70;
 }

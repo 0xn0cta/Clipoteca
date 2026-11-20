@@ -54,7 +54,7 @@ python main.py --dev
 
 ## Qué incluye esta primera entrega
 
-- Interfaz oscura en español con dirección de diseño **Media Ingest Workbench**.
+- Interfaz oscura en español con dirección de diseño **Archivo personal premium**.
 - Preparación de lote con muestra de playlist claramente marcada como ficticia.
 - Selección de elementos disponibles, selección global, formato, calidad y destino en modo demostración.
 - Vista inicial de cola vacía.

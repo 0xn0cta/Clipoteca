@@ -1,19 +1,17 @@
 import { useState } from 'react'
 import {
-  Archive,
   ArrowDownToLine,
-  ArrowLeft,
+  ArrowRight,
+  BookOpen,
   Check,
   ChevronDown,
   CircleAlert,
   Clock3,
-  Download,
   FolderOpen,
-  HardDrive,
   Link2,
   ListVideo,
-  Search,
   Settings2,
+  X,
 } from 'lucide-react'
 import './App.css'
 
@@ -59,7 +57,7 @@ function App() {
     setNotice(
       url.trim()
         ? 'El análisis real se conectará con yt-dlp en la siguiente etapa.'
-        : 'Pega un enlace para preparar un lote.',
+        : 'Pega un enlace para preparar una colección.',
     )
   }
 
@@ -69,236 +67,197 @@ function App() {
 
   return (
     <div className="app-shell">
-      <aside className="sidebar" aria-label="Navegación principal">
-        <div className="brand-lockup">
-          <div className="brand-mark" aria-hidden="true">
-            <Archive size={19} strokeWidth={1.8} />
-          </div>
-          <div className="brand-copy">
-            <span className="brand-name">clipoteca</span>
-            <span className="brand-subtitle">CENTRO DE DESCARGA</span>
-          </div>
-        </div>
-
-        <div className="sidebar-rule" />
-
-        <nav className="primary-nav" aria-label="Secciones">
-          <span className="nav-caption">ESPACIO LOCAL</span>
+      <header className="app-header">
+        <div className="header-inner">
           <button
-            className={`nav-item ${view === 'prepare' ? 'is-active' : ''}`}
+            className="brand"
             type="button"
             onClick={() => setView('prepare')}
-            aria-current={view === 'prepare' ? 'page' : undefined}
+            aria-label="Clipoteca, preparar descarga"
           >
-            <Link2 size={17} aria-hidden="true" />
-            <span>Preparar</span>
+            <BookOpen size={21} strokeWidth={1.6} aria-hidden="true" />
+            <span>clipoteca</span>
           </button>
-          <button
-            className={`nav-item ${view === 'queue' ? 'is-active' : ''}`}
-            type="button"
-            onClick={() => setView('queue')}
-            aria-current={view === 'queue' ? 'page' : undefined}
-          >
-            <ListVideo size={17} aria-hidden="true" />
-            <span>Cola</span>
-            <span className="queue-count">0</span>
-          </button>
-        </nav>
 
-        <div className="sidebar-bottom">
-          <button
-            className="nav-item settings-nav"
-            type="button"
-            onClick={() => setNotice('Los ajustes estarán disponibles en una siguiente etapa.')}
-          >
-            <Settings2 size={17} aria-hidden="true" />
-            <span>Ajustes</span>
-          </button>
-          <div className="engine-state">
-            <span className="engine-dot" aria-hidden="true" />
-            <span>Motor pendiente de conexión</span>
+          <nav className="top-nav" aria-label="Navegación principal">
+            <button
+              className={`top-nav-item ${view === 'prepare' ? 'is-active' : ''}`}
+              type="button"
+              onClick={() => setView('prepare')}
+              aria-current={view === 'prepare' ? 'page' : undefined}
+            >
+              Preparar
+            </button>
+            <button
+              className={`top-nav-item ${view === 'queue' ? 'is-active' : ''}`}
+              type="button"
+              onClick={() => setView('queue')}
+              aria-current={view === 'queue' ? 'page' : undefined}
+            >
+              Descargas
+              <span className="nav-count">0</span>
+            </button>
+          </nav>
+
+          <div className="header-actions">
+            <span className="engine-status">
+              <span className="engine-dot" aria-hidden="true" />
+              Motor pendiente
+            </span>
+            <button
+              className="settings-button"
+              type="button"
+              aria-label="Ajustes"
+              onClick={() => setNotice('Los ajustes estarán disponibles en una siguiente etapa.')}
+            >
+              <Settings2 size={18} strokeWidth={1.7} aria-hidden="true" />
+            </button>
           </div>
         </div>
-      </aside>
+      </header>
 
-      <main className="main-shell">
-        <header className="topbar">
-          <div className="topbar-context">
-            <span className="context-mark" aria-hidden="true" />
-            <span>Biblioteca local</span>
-            <span className="context-separator">/</span>
-            <span>{view === 'prepare' ? 'Nuevo lote' : 'Cola de descargas'}</span>
-          </div>
-          <div className="topbar-state">
-            <span className="prototype-tag">PROTOTIPO</span>
-            <span className="topbar-caption">Windows · versión inicial</span>
-          </div>
-        </header>
-
+      <main className="main-content">
         {view === 'prepare' ? (
-          <div className="page-content">
-            <section className="page-heading">
+          <div className="preparation-view">
+            <section className="page-intro">
               <div>
-                <h1>Prepara un lote</h1>
-                <p>Pega un enlace, revisa el contenido y define cómo guardarlo.</p>
+                <h1>Prepara tu descarga.</h1>
+                <p>Pega un enlace. Revisa la lista. Guarda solo lo que quieras.</p>
               </div>
+              <span className="prototype-badge">Prototipo visual</span>
             </section>
 
-            <div className="prototype-note" role="note">
-              <span className="note-icon">
-                <CircleAlert size={16} aria-hidden="true" />
-              </span>
+            <section className="source-panel" aria-labelledby="source-title">
+              <label className="source-label" id="source-title" htmlFor="source-url">
+                Enlace de video o playlist
+              </label>
+              <div className="source-control">
+                <Link2 size={19} strokeWidth={1.7} aria-hidden="true" />
+                <input
+                  id="source-url"
+                  type="url"
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder="Pega aquí un enlace de YouTube"
+                  autoComplete="url"
+                />
+                <button className="analyze-button" type="button" onClick={analyzeUrl}>
+                  Analizar enlace
+                  <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
+                </button>
+              </div>
+              <p className="source-hint">Podrás revisar y elegir los elementos antes de iniciar.</p>
+            </section>
+
+            <div className="demo-disclosure" role="note">
+              <CircleAlert size={16} strokeWidth={1.7} aria-hidden="true" />
               <p>
-                <strong>Vista de demostración.</strong> La playlist es ficticia y no está asociada a
-                la URL; no se analiza ni se descarga contenido.
+                <strong>Muestra interactiva.</strong> La playlist es ficticia y no está asociada a la URL.
+                No se analiza ni se descarga contenido.
               </p>
-              <span className="note-state">MOTOR NO CONECTADO</span>
             </div>
 
-            <div className="workbench">
-              <div className="source-column">
-                <section className="source-section" aria-labelledby="source-title">
-                  <div className="section-heading">
-                    <div>
-                      <h2 id="source-title">Fuente</h2>
-                      <p>Video o playlist de YouTube</p>
-                    </div>
-                  </div>
-                  <div className="url-control">
-                    <Link2 size={18} aria-hidden="true" />
-                    <label className="visually-hidden" htmlFor="source-url">
-                      URL del video o playlist
-                    </label>
-                    <input
-                      id="source-url"
-                      type="url"
-                      value={url}
-                      onChange={(event) => setUrl(event.target.value)}
-                      placeholder="Pega aquí un enlace de YouTube"
-                      autoComplete="url"
-                    />
-                    <button className="analyze-button" type="button" onClick={analyzeUrl}>
-                      Analizar enlace
-                      <Search size={15} aria-hidden="true" />
-                    </button>
-                  </div>
-                  <div className="source-footnote">
-                    <span>Los elementos se revisan antes de iniciar.</span>
-                    <span>MP4 · MP3</span>
-                  </div>
-                </section>
-
-                <section className="manifest-section" aria-labelledby="manifest-title">
-                  <div className="manifest-heading">
-                    <div className="manifest-title-group">
-                      <div className="manifest-title-line">
-                        <h2 id="manifest-title">Playlist de ejemplo</h2>
-                        <span className="demo-label">DATOS DE MUESTRA</span>
-                      </div>
-                      <p>4 elementos · sin enlace asociado</p>
-                    </div>
-                    <span className="sample-unlinked">NO VINCULADA</span>
-                  </div>
-
-                  <div className="manifest-toolbar">
-                    <label className="select-all-control">
-                      <input
-                        type="checkbox"
-                        checked={allSelected}
-                        onChange={toggleAll}
-                        aria-label={allSelected ? 'Desmarcar elementos disponibles' : 'Seleccionar elementos disponibles'}
-                      />
-                      <span className="custom-check" aria-hidden="true">
-                        <Check size={12} />
-                      </span>
-                      <span>{selectedIds.length} seleccionados</span>
-                    </label>
-                    <button className="text-button" type="button" onClick={toggleAll}>
-                      {allSelected ? 'Desmarcar disponibles' : 'Seleccionar disponibles'}
-                    </button>
-                  </div>
-
-                  <div className="manifest-table-wrap">
-                    <table className="manifest-table">
-                      <thead>
-                        <tr>
-                          <th className="check-column" scope="col">
-                            <span className="visually-hidden">Seleccionar</span>
-                          </th>
-                          <th className="number-column" scope="col">#</th>
-                          <th scope="col">ELEMENTO</th>
-                          <th className="duration-column" scope="col">DURACIÓN</th>
-                          <th className="status-column" scope="col">ESTADO</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {demoItems.map((item) => {
-                          const checked = selectedIds.includes(item.id)
-                          return (
-                            <tr
-                              className={`${checked ? 'is-selected' : ''} ${!item.available ? 'is-unavailable' : ''}`}
-                              key={item.id}
-                            >
-                              <td className="check-cell">
-                                <label className="row-check">
-                                  <input
-                                    type="checkbox"
-                                    checked={checked}
-                                    disabled={!item.available}
-                                    onChange={() => toggleItem(item.id)}
-                                    aria-label={`Seleccionar ${item.title}`}
-                                  />
-                                  <span className="custom-check" aria-hidden="true">
-                                    <Check size={12} />
-                                  </span>
-                                </label>
-                              </td>
-                              <td className="item-number">{String(item.id).padStart(2, '0')}</td>
-                              <td className="title-cell">
-                                <span className="item-title">{item.title}</span>
-                                <span className="item-kind">VIDEO · MUESTRA</span>
-                              </td>
-                              <td className="item-duration">
-                                <Clock3 size={13} aria-hidden="true" />
-                                {item.duration}
-                              </td>
-                              <td>
-                                <span className={`availability ${item.available ? 'is-available' : 'is-unavailable'}`}>
-                                  <span className="availability-dot" aria-hidden="true" />
-                                  {item.available ? 'Disponible' : 'No disponible'}
-                                </span>
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className="manifest-footer">
-                    <span>
-                      <span className="footer-mark" aria-hidden="true" />
-                      Se conserva el orden original de la playlist
-                    </span>
-                    <span>1 elemento se omitirá</span>
-                  </div>
-                </section>
-              </div>
-
-              <aside className="output-rail" aria-labelledby="output-title">
-                <div className="output-heading">
+            <div className="collection-layout">
+              <section className="playlist-section" aria-labelledby="playlist-title">
+                <header className="playlist-heading">
                   <div>
-                    <h2 id="output-title">Salida</h2>
-                    <p>Opciones del lote</p>
+                    <div className="playlist-title-line">
+                      <h2 id="playlist-title">Playlist de ejemplo</h2>
+                      <span className="sample-badge">Muestra</span>
+                    </div>
+                    <p>4 elementos <span aria-hidden="true">·</span> sin enlace asociado</p>
                   </div>
-                  <span className="output-symbol" aria-hidden="true">
-                    <HardDrive size={17} />
-                  </span>
+                  <span className="availability-summary">3 disponibles</span>
+                </header>
+
+                <div className="selection-toolbar">
+                  <label className="select-all-control">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      aria-label={allSelected ? 'Desmarcar elementos disponibles' : 'Seleccionar elementos disponibles'}
+                    />
+                    <span className="custom-check" aria-hidden="true">
+                      <Check size={12} strokeWidth={2.5} />
+                    </span>
+                    <span>{selectedIds.length} de 4 seleccionados</span>
+                  </label>
+                  <button className="text-button" type="button" onClick={toggleAll}>
+                    {allSelected ? 'Desmarcar' : 'Seleccionar disponibles'}
+                  </button>
+                </div>
+
+                <div className="media-list-wrap">
+                  <table className="media-list">
+                    <thead>
+                      <tr>
+                        <th className="check-column" scope="col">
+                          <span className="visually-hidden">Seleccionar</span>
+                        </th>
+                        <th scope="col">Elemento</th>
+                        <th className="duration-column" scope="col">Duración</th>
+                        <th className="status-column" scope="col">Estado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {demoItems.map((item, index) => {
+                        const checked = selectedIds.includes(item.id)
+                        return (
+                          <tr
+                            className={`${checked ? 'is-selected' : ''} ${!item.available ? 'is-unavailable' : ''}`}
+                            key={item.id}
+                          >
+                            <td className="check-cell">
+                              <label className="row-check">
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  disabled={!item.available}
+                                  onChange={() => toggleItem(item.id)}
+                                  aria-label={`Seleccionar ${item.title}`}
+                                />
+                                <span className="custom-check" aria-hidden="true">
+                                  <Check size={12} strokeWidth={2.5} />
+                                </span>
+                              </label>
+                            </td>
+                            <td className="title-cell">
+                              <span className="item-title">{item.title}</span>
+                              <span className="item-number">Elemento {String(index + 1).padStart(2, '0')}</span>
+                            </td>
+                            <td className="item-duration">
+                              <Clock3 size={14} strokeWidth={1.7} aria-hidden="true" />
+                              {item.duration}
+                            </td>
+                            <td>
+                              <span className={`availability ${item.available ? 'is-available' : 'is-unavailable'}`}>
+                                <span className="availability-dot" aria-hidden="true" />
+                                {item.available ? 'Disponible' : 'No disponible'}
+                              </span>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="playlist-footnote">
+                  <span>Se conserva el orden original</span>
+                  <span>1 elemento no disponible</span>
+                </div>
+              </section>
+
+              <aside className="preferences-panel" aria-labelledby="preferences-title">
+                <div className="preferences-heading">
+                  <h2 id="preferences-title">Preferencias</h2>
+                  <p>Para esta colección</p>
                 </div>
 
                 <fieldset className="format-field">
                   <legend>Formato</legend>
-                  <div className="format-options">
+                  <div className="format-options" role="group" aria-label="Formato de salida">
                     {([
                       ['video', 'Video', 'MP4'],
                       ['audio', 'Audio', 'MP3'],
@@ -320,8 +279,8 @@ function App() {
 
                 <div className="quality-field">
                   <label htmlFor="quality-select">
-                    Calidad
-                    <span>Por defecto, la mejor disponible</span>
+                    <span>Calidad</span>
+                    <span>Mejor disponible por defecto</span>
                   </label>
                   <div className={`select-shell ${format === 'audio' ? 'is-disabled' : ''}`}>
                     <select
@@ -340,54 +299,54 @@ function App() {
                 </div>
 
                 <div className="destination-field">
-                  <div className="field-label">
-                    <span>Destino</span>
-                    <span>DESTINO DE MUESTRA</span>
-                  </div>
-                  <button className="destination-button" type="button" onClick={showFolderNotice}>
-                    <FolderOpen size={17} aria-hidden="true" />
+                  <div className="destination-label">Carpeta de destino</div>
+                  <button
+                    className="destination-button"
+                    type="button"
+                    onClick={showFolderNotice}
+                  >
+                    <FolderOpen size={17} strokeWidth={1.7} aria-hidden="true" />
                     <span>
                       <strong>Descargas / Clipoteca</strong>
-                      <small>No guardado · vista de demostración</small>
+                      <small>Ejemplo · aún no guardado</small>
                     </span>
                     <ChevronDown size={15} aria-hidden="true" />
                   </button>
-                  <p className="folder-note">En una descarga real, cada playlist tendrá su subcarpeta.</p>
                 </div>
 
-                <div className="output-rule" />
+                <div className="collection-rule" />
 
-                <div className="batch-summary">
-                  <div className="summary-line">
-                    <span>Elementos seleccionados</span>
-                    <strong>{selectedIds.length}</strong>
+                <div className="collection-summary">
+                  <div>
+                    <span>En la playlist</span>
+                    <strong>4 elementos</strong>
                   </div>
-                  <div className="summary-line">
-                    <span>Elementos omitidos</span>
-                    <strong className="muted-value">1</strong>
+                  <div>
+                    <span>Guardarás</span>
+                    <strong>{selectedIds.length} elementos</strong>
                   </div>
-                  <div className="summary-line total-line">
-                    <span>Organización</span>
-                    <strong>Por playlist</strong>
-                  </div>
+                </div>
+
+                <div className="collection-note">
+                  <BookOpen size={16} strokeWidth={1.7} aria-hidden="true" />
+                  <span>Cada playlist tendrá su propia carpeta.</span>
                 </div>
               </aside>
             </div>
 
-            <footer className="action-dock">
-              <div className="action-status">
-                <span className="action-icon">
-                  <Download size={16} aria-hidden="true" />
+            <footer className="download-bar">
+              <div className="download-summary">
+                <span className="download-icon">
+                  <ArrowDownToLine size={17} strokeWidth={1.8} aria-hidden="true" />
                 </span>
                 <div>
-                  <strong>{selectedIds.length} elementos listos para preparar</strong>
-                  <span>El motor de descarga aún no está conectado.</span>
+                  <strong>{selectedIds.length} elementos seleccionados</strong>
+                  <span>El motor de descarga todavía no está conectado.</span>
                 </div>
               </div>
-              <button className="start-button" type="button" disabled>
-                Iniciar lote
-                <span className="button-count">{selectedIds.length}</span>
-                <ArrowDownToLine size={16} aria-hidden="true" />
+              <button className="download-button" type="button" disabled>
+                Preparar descarga
+                <span>{selectedIds.length}</span>
               </button>
             </footer>
 
@@ -395,28 +354,26 @@ function App() {
               <div className="toast" role="status">
                 <span>{notice}</span>
                 <button type="button" aria-label="Cerrar aviso" onClick={() => setNotice('')}>
-                  <span aria-hidden="true">×</span>
+                  <X size={16} aria-hidden="true" />
                 </button>
               </div>
             )}
           </div>
         ) : (
-          <div className="queue-page">
-            <div className="page-heading">
-              <div>
-                <h1>Cola de descargas</h1>
-                <p>El progreso y los resultados de cada elemento aparecerán aquí.</p>
-              </div>
+          <div className="queue-view">
+            <div className="queue-heading">
+              <h1>Descargas</h1>
+              <p>El progreso de cada video y playlist aparecerá aquí.</p>
             </div>
             <section className="queue-empty">
-              <div className="empty-mark">
+              <span className="empty-icon">
                 <ListVideo size={24} strokeWidth={1.5} aria-hidden="true" />
-              </div>
-              <h2>La cola está vacía</h2>
-              <p>Cuando el motor de descarga esté conectado, podrás seguir cada video y playlist desde aquí.</p>
+              </span>
+              <h2>Aún no hay descargas</h2>
+              <p>Cuando conectemos el motor, podrás seguir tus colecciones desde aquí.</p>
               <button className="return-button" type="button" onClick={() => setView('prepare')}>
-                Volver a preparar
-                <ArrowLeft size={15} aria-hidden="true" />
+                Preparar una descarga
+                <ArrowRight size={15} aria-hidden="true" />
               </button>
             </section>
           </div>
