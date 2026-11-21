@@ -524,10 +524,11 @@
 
 **Criterios de aceptación:**
 - [ ] El instalador ofrece `clipoteca-cli.exe` separado de la app gráfica y conserva los datos compartidos.
-- [ ] README/docs incluyen ejemplos PowerShell, JSON, códigos de salida, límites y errores comunes.
+- [x] README/docs incluyen ejemplos PowerShell, JSON, códigos de salida, límites y errores comunes.
 - [ ] CI prueba comandos y flujo headless con servicios mock; no usa URLs reales.
 
 **Verificación:** build/instalación/actualización en Windows limpio; smoke CLI sin GUI, más verificación de concurrencia con la app.
+**Verificación portátil:** Windows 11 x64, Python 3.14.6 y PyInstaller 6.22.3. La CLI compilada pasó ayuda, estado, preferencias con acentos, cola, historial y errores JSON sin red ni GUI. La app compilada inició WebView2 y sirvió sus assets. Con la app abierta, la CLI leyó la misma SQLite aislada. Build, lint y 96 pruebas Python con 14 subpruebas correctos. Pendientes instalador, actualización en Windows limpio y validación con medios autorizados reales.
 **Dependencias:** T23, T24, T25, T28–T33, T01–T02.
 **Archivos previstos:** `pyinstaller.spec`, `packaging/build.ps1`, `packaging/installer/`, `docs/CLI.md`, `README.md`, pruebas.
 **Alcance:** M.

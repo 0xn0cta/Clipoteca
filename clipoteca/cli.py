@@ -8,7 +8,7 @@ import os
 import shutil
 import sys
 import time
-from typing import Any, Sequence
+from typing import Any, Sequence, TextIO
 
 
 CLI_VERSION = "dev"
@@ -18,6 +18,16 @@ EXIT_OPERATION_FAILED = 3
 EXIT_UNAVAILABLE = 4
 EXIT_INTERRUPTED = 130
 JSON_SCHEMA_VERSION = 1
+
+
+def _write_json(payload: dict[str, Any], stream: TextIO) -> None:
+    line = json.dumps(payload, ensure_ascii=False, sort_keys=True) + "\n"
+    if hasattr(stream, "buffer"):
+        stream.buffer.write(line.encode("utf-8"))
+        stream.buffer.flush()
+    else:
+        stream.write(line)
+        stream.flush()
 
 
 class _CliUsageError(Exception):
@@ -279,7 +289,7 @@ def _emit_download_progress(
             "status": item["status"],
             "progress": progress,
         }
-        print(json.dumps(event, ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        _write_json(event, sys.stderr)
         return
 
     label = f"{int(progress * 100)}%" if progress is not None else "progreso indeterminado"
@@ -739,7 +749,7 @@ def _write_success(command: str, data: dict[str, Any], *, json_output: bool) -> 
             "command": command,
             "data": data,
         }
-        print(json.dumps(payload, ensure_ascii=False, sort_keys=True))
+        _write_json(payload, sys.stdout)
     else:
         _write_text_result(command, data)
     return EXIT_OK
@@ -762,7 +772,7 @@ def _write_error(
     if data is not None:
         payload["data"] = data
     if json_output:
-        print(json.dumps(payload, ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        _write_json(payload, sys.stderr)
     else:
         print(f"Error [{code}]: {message}", file=sys.stderr)
     if code == "USAGE_ERROR":

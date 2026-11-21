@@ -2,51 +2,16 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 from pathlib import Path
 import sys
 from logging.handlers import RotatingFileHandler
+
+from clipoteca.windows_path import refresh_windows_user_path
 
 
 ROOT = Path(__file__).resolve().parent
 FRONTEND_URL = "http://127.0.0.1:5173"
 BUILT_FRONTEND = ROOT / "frontend" / "dist" / "index.html"
-
-
-def refresh_windows_user_path() -> None:
-    """Make persisted user PATH updates visible even when the launcher has a stale environment."""
-    if sys.platform != "win32":
-        return
-
-    try:
-        import winreg
-
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
-            user_path, _ = winreg.QueryValueEx(key, "Path")
-    except (ImportError, OSError):
-        return
-
-    if not isinstance(user_path, str) or not user_path:
-        return
-
-    process_entries = os.environ.get("PATH", "").split(os.pathsep)
-    existing = {
-        os.path.normcase(os.path.normpath(os.path.expandvars(entry.strip().strip('"'))))
-        for entry in process_entries
-        if entry.strip()
-    }
-    missing_entries = []
-    for entry in os.path.expandvars(user_path).split(os.pathsep):
-        entry = entry.strip().strip('"')
-        if not entry:
-            continue
-        normalized = os.path.normcase(os.path.normpath(entry))
-        if normalized not in existing:
-            missing_entries.append(entry)
-            existing.add(normalized)
-
-    if missing_entries:
-        os.environ["PATH"] = os.pathsep.join([*missing_entries, *process_entries])
 
 
 def configure_logging() -> None:

@@ -59,14 +59,23 @@ python main.py --dev
 
 ## Automatizar desde consola
 
-Con el entorno Python del proyecto activo, consulta los comandos disponibles:
+En Windows puedes compilar una distribución portátil con la app de escritorio y un ejecutable de consola independiente:
 
 ```powershell
-python -m clipoteca.cli --help
-python -m clipoteca.cli --json status
+python -m venv .venv-build
+.\.venv-build\Scripts\python.exe -m pip install -r packaging/requirements-build.txt
+.\packaging\build.ps1 -Python .\.venv-build\Scripts\python.exe
 ```
 
-La CLI comparte la cola y las preferencias locales con la aplicación. `download` permite ejecutar en segundo plano con `--wait`; para una playlist hay que indicar `--all` o seleccionar elementos con `--item`. Sin `--wait`, el lote se añade a la cola persistente para que lo procese Clipoteca abierta o un worker activo. La guía completa está en [`docs/CLI.md`](docs/CLI.md). El ejecutable de consola independiente todavía no se incluye en un instalador.
+La build genera `dist/windows/Clipoteca/Clipoteca.exe` y `dist/windows/clipoteca-cli/clipoteca-cli.exe`. Conserva la carpeta completa de cada ejecutable, incluida `_internal`. La app gráfica requiere WebView2 y las operaciones de medios usan `ffmpeg` y `ffprobe` del `PATH` de Windows. La CLI funciona sin abrir la interfaz.
+
+```powershell
+.\dist\windows\clipoteca-cli\clipoteca-cli.exe --json status
+.\dist\windows\clipoteca-cli\clipoteca-cli.exe --json queue list
+python tests/smoke_packaged_cli.py
+```
+
+La CLI comparte la cola y las preferencias locales con la aplicación. `download --wait` permite procesar las descargas desde la consola. Para una playlist hay que indicar `--all` o seleccionar elementos con `--item`. En desarrollo se puede usar `python -m clipoteca.cli`. La guía de automatización y códigos de salida está en [`docs/CLI.md`](docs/CLI.md).
 
 ## Funcionalidades implementadas en esta fase
 

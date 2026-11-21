@@ -1,4 +1,5 @@
 .venv/
+.venv-build/
 venv/
 __pycache__/
 *.py[cod]
@@ -8,6 +9,9 @@ __pycache__/
 frontend/node_modules/
 frontend/dist/
 frontend/coverage/
+
+/dist/
+/build/pyinstaller/
 
 .impeccable/config.local.json
 .impeccable/build/

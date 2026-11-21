@@ -1,6 +1,16 @@
 # CLI de Clipoteca
 
-Clipoteca ofrece una interfaz local de consola para automatizar procesos. Durante el desarrollo se puede invocar así:
+Clipoteca ofrece una interfaz local de consola para automatizar procesos. En la build portátil de Windows invoca `clipoteca-cli.exe` desde su carpeta completa:
+
+```powershell
+$cli = (Resolve-Path .\dist\windows\clipoteca-cli\clipoteca-cli.exe).Path
+& $cli --json status
+& $cli --json queue list
+```
+
+Un agente debe pasar los argumentos por separado al proceso, leer stdout y stderr en UTF-8 y comprobar el código de salida. `status` devuelve `0` si pudo consultar el entorno. Comprueba `data.download_engine_ready` y `data.ffmpeg_ready` antes de procesar medios.
+
+Durante el desarrollo también se puede invocar así:
 
 ```powershell
 python -m clipoteca.cli --help
@@ -46,7 +56,7 @@ Usa solo videos o playlists que posees o tienes autorización para guardar. Para
 
 `queue resume` y `queue retry` admiten `--wait` para ejecutarse en modo headless hasta que termine el trabajo afectado. La cancelación global y el borrado del historial requieren `--yes`; cancelar o limpiar registros nunca borra los medios ya descargados. `history open` usa la aplicación predeterminada de Windows.
 
-La configuración inicial de concurrencia requiere un modo y un valor positivo explícitos; el modo manual no tiene máximo impuesto por la app. `theme_mode` acepta `system`, `dark` o `light`; la integración visual de esos valores llega en T37. El ejecutable de consola empaquetado está pendiente de T34.
+La configuración inicial de concurrencia requiere un modo y un valor positivo explícitos. El modo manual no tiene máximo impuesto por la app. `theme_mode` acepta `system`, `dark` o `light`.
 
 ## Salida y códigos de salida
 
@@ -75,4 +85,4 @@ Los errores se escriben en stderr y los resultados correctos en stdout. El progr
 | `4` | Función no disponible o aún no implementada. |
 | `130` | Interrumpido con Ctrl+C; el trabajo activo se pausó. |
 
-El ejecutable independiente `clipoteca-cli.exe` está pendiente de T34 y del empaquetado Windows. Hasta entonces, usa `python -m clipoteca.cli` desde el entorno del proyecto. Analizar o previsualizar una URL nunca inicia una descarga por sí solo.
+La build portátil incluye el motor de Clipoteca. FFmpeg y ffprobe se resuelven en el `PATH` del proceso, y el acceso a las fuentes depende del enlace y el servicio. Analizar o previsualizar una URL nunca inicia una descarga por sí solo.
