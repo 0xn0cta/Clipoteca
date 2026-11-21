@@ -3,7 +3,7 @@ from __future__ import annotations
 import unittest
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from yt_dlp import YoutubeDL
 
@@ -144,11 +144,14 @@ class EngineTests(unittest.TestCase):
         muxed_h264 = stream("mp4-avc", "mp4", "avc1.42001e", "mp4a.40.2", height=360)
         h264 = stream("avc720", "mp4", "avc1.64001f", "none", height=720)
         av1 = stream("av11080", "mp4", "av01.0.08M.08", "none", height=1080)
+        instagram_h264 = stream("instagram-h264", "mp4", "h264", "mp4a.40.2", height=720)
+        instagram_vp9 = stream("instagram-vp9", "mp4", "vp9", "mp4a.40.2", height=1080)
         cases = [
             ("auto", [audio, h264, av1], ["avc720+audio"]),
             ("auto", [audio, muxed_h264, av1], ["mp4-avc"]),
             ("auto", [audio, av1], ["av11080+audio"]),
             ("480", [audio, muxed_h264, h264, av1], ["mp4-avc"]),
+            ("auto", [instagram_h264, instagram_vp9], ["instagram-h264"]),
             ("auto", [audio_only_mp4], []),
         ]
 
@@ -158,7 +161,7 @@ class EngineTests(unittest.TestCase):
                     selector = ydl.build_format_selector(_format_options("video", quality)[0][2]["format"])
                     selected = selector({
                         "formats": formats,
-                        "has_merged_format": muxed_h264 in formats,
+                        "has_merged_format": any(item["vcodec"] != "none" and item["acodec"] != "none" for item in formats),
                         "incomplete_formats": formats == [audio_only_mp4],
                     })
                     self.assertEqual([item["format_id"] for item in selected], expected)
@@ -198,7 +201,9 @@ class EngineTests(unittest.TestCase):
         self.assertIn("protegido con DRM", str(raised.exception))
 
     def test_existing_files_are_skipped_without_overwriting(self) -> None:
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, patch(
+            "clipoteca.engine._probe_mp4", return_value=(True, True, True),
+        ):
             target = Path(directory) / "Title [video-1].mp4"
             target.write_bytes(b"keep")
             result = download_item(
@@ -266,7 +271,10 @@ class EngineTests(unittest.TestCase):
                     target.write_bytes(b"simulated merged output")
                     self.on_postprocess({"status": "finished", "postprocessor": "Merger"})
 
-            with patch("clipoteca.engine.YoutubeDL", FakeMuxedDownload):
+            with (
+                patch("clipoteca.engine.YoutubeDL", FakeMuxedDownload),
+                patch("clipoteca.engine._probe_mp4", return_value=(True, True, True)),
+            ):
                 result = download_item(
                     source_url="https://www.youtube.com/watch?v=video",
                     source_id="video-3",
@@ -326,6 +334,44 @@ class EngineTests(unittest.TestCase):
                         should_stop=lambda: None,
                     )
             self.assertTrue(audio_track.is_file())
+
+    def test_existing_vp9_mp4_creates_compatible_copy_without_downloading_again(self) -> None:
+        updates = []
+        with tempfile.TemporaryDirectory() as directory:
+            original = Path(directory) / "Video [reel].mp4"
+            original.write_bytes(b"original vp9")
+            expected = original.with_name("Video [reel] [H.264].mp4")
+
+            def fake_ffmpeg(command, **_kwargs):
+                self.assertIn("libx264", command)
+                Path(command[-1]).write_bytes(b"converted h264")
+                process = MagicMock()
+                process.__enter__.return_value.wait.return_value = 0
+                return process
+
+            with (
+                patch("clipoteca.engine._probe_mp4", side_effect=[(False, True, True), (True, True, True)]),
+                patch("clipoteca.engine.shutil.which", return_value="ffmpeg"),
+                patch("clipoteca.engine.subprocess.Popen", side_effect=fake_ffmpeg),
+                patch("clipoteca.engine.YoutubeDL") as youtube_dl,
+            ):
+                result = download_item(
+                    source_url="https://www.instagram.com/reels/reel/",
+                    source_id="reel",
+                    title="Video",
+                    destination=directory,
+                    output_format="video",
+                    quality="auto",
+                    progress=updates.append,
+                    should_stop=lambda: None,
+                )
+
+            youtube_dl.assert_not_called()
+            self.assertEqual(result["paths"], [str(expected)])
+            self.assertFalse(result["duplicate"])
+            self.assertEqual(original.read_bytes(), b"original vp9")
+            self.assertEqual(expected.read_bytes(), b"converted h264")
+            self.assertEqual(updates[0]["phase"], "converting_video")
 
 
 if __name__ == "__main__":

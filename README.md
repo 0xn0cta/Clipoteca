@@ -73,7 +73,7 @@ La CLI comparte la cola y las preferencias locales con la aplicación. `download
 - Interfaz oscura en español con dirección de diseño **Archivo personal premium**.
 - Análisis de vídeos y playlists de YouTube, Reels y publicaciones con un solo vídeo de Instagram, y publicaciones de vídeo de Reddit.
 - Previsualización de la selección con miniatura y reproducción de audio/vídeo cuando la fuente lo permite; la reproducción no guarda un archivo.
-- Descarga de vídeo MP4, audio MP3 o ambos; FFmpeg es necesario para unir pistas y convertir audio.
+- Descarga de MP4 compatible con Windows, MP3 o ambos. FFmpeg verifica las pistas y convierte vídeo o audio solo cuando hace falta.
 - Cola persistente con progreso por elemento, pausa, reanudación, cancelación y hasta tres reintentos automáticos ante errores temporales.
 - Historial separado; limpiar el historial borra los registros de Clipoteca, no los archivos.
 - Apertura de los archivos finalizados desde el historial con la aplicación predeterminada de Windows.

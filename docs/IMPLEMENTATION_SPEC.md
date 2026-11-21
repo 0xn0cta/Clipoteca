@@ -186,7 +186,7 @@ La UI actual consulta `get_queue_state()` de forma periódica. El MVP debe mante
 
 ## 8. Formatos, concurrencia y errores
 
-- **MP4:** elegir pistas compatibles, unir/remux con FFmpeg cuando proceda; no re-encodear silenciosamente.
+- **MP4:** elegir H.264 y AAC cuando estén disponibles. Si las pistas descargadas no son compatibles, convertir solo las necesarias con FFmpeg y mostrar la fase de compatibilidad en la cola. Si hay un MP4 anterior incompatible, conservarlo y generar una copia compatible.
 - **MP3:** extracción/conversión por FFmpeg; si falta el binario, bloquear esa opción con instrucciones claras.
 - **Ambos:** producir una salida de video y una de audio por cada entrada seleccionada; reportar cada salida/resultado.
 - **Calidad:** opciones basadas en formatos reales; si una resolución no existe, no mostrarla.

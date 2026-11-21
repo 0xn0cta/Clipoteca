@@ -22,6 +22,8 @@ from .worker_lock import WorkerLock
 
 logger = logging.getLogger("clipoteca.manager")
 Notifier = Callable[[str, str], None]
+_DUPLICATE_NOTE = "Ya existía; no se sobrescribió."
+_PARTIAL_DUPLICATE_NOTE = "Ya existían algunos archivos; se guardó el resto."
 
 
 class DownloadManager:
@@ -38,6 +40,7 @@ class DownloadManager:
         self.downloader = downloader
         self._lock = threading.RLock()
         self._running: dict[str, threading.Thread] = {}
+        self._notified_batches: dict[str, str] = {}
         self._running_targets: dict[str, str] = {}
         self._active_output_targets: set[str] = set()
         self._stopping = threading.Event()
@@ -425,7 +428,9 @@ class DownloadManager:
                         self._remove_partials(item)
                         self.database.mark_cancelled(item_id)
                     else:
-                        note = "Ya existía; no se sobrescribió." if result.get("duplicate") else None
+                        note = None
+                        if result.get("duplicate"):
+                            note = _DUPLICATE_NOTE if result.get("duplicate_only", True) else _PARTIAL_DUPLICATE_NOTE
                         self.database.update_item(
                             item_id,
                             status="completed",
@@ -433,9 +438,6 @@ class DownloadManager:
                             output_path=json.dumps(result.get("paths", []), ensure_ascii=False),
                             error=note,
                         )
-                        if note:
-                            self._notify("Archivo duplicado omitido", item["title"])
-                    self._notify_batch_if_finished(item["batch_id"])
                     return
                 except DownloadInterrupted as exc:
                     action = self._get_action(item_id)
@@ -462,8 +464,6 @@ class DownloadManager:
                             self.database.update_item(item_id, status="paused")
                         return
                     self.database.update_item(item_id, status="failed", error=str(exc))
-                    self._notify("Descarga fallida", item["title"])
-                    self._notify_batch_if_finished(item["batch_id"])
                     return
                 except Exception as exc:
                     logger.exception("Fallo no controlado en el elemento %s", item_id)
@@ -472,13 +472,12 @@ class DownloadManager:
                         status="failed",
                         error="No se pudo completar la descarga. Consulta el registro local para más detalles.",
                     )
-                    self._notify("Descarga fallida", item["title"])
-                    self._notify_batch_if_finished(item["batch_id"])
                     return
         finally:
             try:
                 if claimed:
                     self.database.clear_worker_action(item_id)
+                    self._notify_batch_if_finished(item["batch_id"], item["batch_title"])
             finally:
                 self._release_running_item(item_id)
 
@@ -536,7 +535,7 @@ class DownloadManager:
                 except OSError:
                     logger.warning("No se pudo borrar el archivo parcial %s", path.name)
 
-    def _notify_batch_if_finished(self, batch_id: str) -> None:
+    def _notify_batch_if_finished(self, batch_id: str, batch_title: str) -> None:
         items = self.database.batch_items(batch_id)
         if not items or any(item["status"] in {"queued", "downloading", "paused"} for item in items):
             return
@@ -544,10 +543,37 @@ class DownloadManager:
         failed = sum(item["status"] == "failed" for item in items)
         if completed == 0 and failed == 0:
             return
+        finished_at = max(item["updated_at"] for item in items)
+        with self._lock:
+            if self._notified_batches.get(batch_id) == finished_at:
+                return
+            self._notified_batches[batch_id] = finished_at
+
+        duplicates = sum(item["status"] == "completed" and item["error"] == _DUPLICATE_NOTE for item in items)
+        if len(items) == 1:
+            item = items[0]
+            if failed:
+                self._notify("Descarga fallida", f"{item['title']}\n{item['error'] or 'Revisa la cola e inténtalo de nuevo.'}")
+            elif duplicates:
+                self._notify("Archivo existente", f"{item['title']}\n{_DUPLICATE_NOTE}")
+            else:
+                message = item["title"]
+                if item["error"] == _PARTIAL_DUPLICATE_NOTE:
+                    message += f"\n{_PARTIAL_DUPLICATE_NOTE}"
+                self._notify("Descarga completada", message)
+            return
+
+        downloaded = completed - duplicates
+        cancelled = sum(item["status"] == "cancelled" for item in items)
+        details = [f"{downloaded} nuevos"]
+        if duplicates:
+            details.append(f"{duplicates} ya existentes")
         if failed:
-            self._notify("Lote terminado con fallos", f"{completed} completados · {failed} por reintentar")
-        else:
-            self._notify("Lote terminado", f"{completed} elementos completados")
+            details.append(f"{failed} por reintentar")
+        if cancelled:
+            details.append(f"{cancelled} cancelados")
+        title = "Lote terminado con fallos" if failed else "Lote terminado"
+        self._notify(title, f"{batch_title}\n{' · '.join(details)}")
 
     def _notify(self, title: str, message: str) -> None:
         try:

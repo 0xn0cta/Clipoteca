@@ -244,6 +244,14 @@ def main() -> None:
             expect(steps.get_by_role("listitem", name="Unir, en curso")).to_have_attribute("aria-current", "step")
             expect(steps.locator('[data-state="done"]')).to_have_count(2)
             steps.screenshot(path=str(CAPTURES / "t17-download-steps.png"))
+            page.evaluate("""() => {
+                const item = window.mockQueueState.queue[1];
+                item.download_phase = 'converting_video';
+                item.download_steps[2].status = 'done';
+                item.download_steps.push({id: 'compatibility', status: 'active'});
+            }""")
+            expect(page.locator(".progress-line")).to_contain_text("Preparando MP4 compatible con Windows")
+            expect(steps.get_by_role("listitem", name="Compatibilidad, en curso")).to_have_attribute("aria-current", "step")
             expect(page.locator(".download-timing")).to_contain_text("Sin estimación")
             assert progress_bar.get_attribute("aria-valuenow") is None
             expect(page.locator(".queue-elapsed")).to_contain_text("Tiempo descargando: 18 s")
@@ -363,6 +371,7 @@ def main() -> None:
             expect(toast).to_have_text("Pega un enlace para analizarlo.")
             toast.get_by_role("button", name="Cerrar aviso").click()
             expect(toast).to_have_count(0)
+            fast_page.mouse.move(400, 200)
 
             fast_page.evaluate("""() => {
                 window.pywebview.api.get_queue_state = async () => {

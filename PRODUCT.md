@@ -30,7 +30,7 @@ The first release targets Windows. A user pastes a video or playlist URL, review
 
 - First release is for Windows; the interface is in Spanish.
 - The UI is modern and dark; the approved visual direction is documented in `DESIGN.md`.
-- Support video, audio, or both: MP4 video and MP3 audio.
+- Support MP4 video compatible with Windows, MP3 audio, or both. Explain when preparing an MP4 requires conversion.
 - Prefer the best available quality by default, with a selector for available qualities.
 - Use `Descargas/Clipoteca` as the initial destination, remember it, and allow changing it for a download.
 - Put playlist files in a subfolder named after the playlist.

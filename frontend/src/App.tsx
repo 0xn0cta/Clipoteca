@@ -74,7 +74,7 @@ type QueueItem = {
   progress: number
   downloaded_bytes?: number
   total_bytes?: number | null
-  download_phase?: 'preparing' | 'transfer' | 'video' | 'audio' | 'between_tracks' | 'merging' | 'converting' | 'finalizing' | 'retrying' | null
+  download_phase?: 'preparing' | 'transfer' | 'video' | 'audio' | 'between_tracks' | 'merging' | 'converting' | 'converting_video' | 'finalizing' | 'retrying' | null
   download_steps?: DownloadStep[] | null
   speed: number | null
   eta: number | null
@@ -84,7 +84,7 @@ type QueueItem = {
 }
 
 type DownloadStep = {
-  id: 'video' | 'silent_video' | 'audio' | 'merge' | 'file' | 'save' | 'mp3_audio' | 'convert'
+  id: 'video' | 'silent_video' | 'audio' | 'merge' | 'file' | 'save' | 'mp3_audio' | 'convert' | 'compatibility'
   status: 'pending' | 'active' | 'done'
 }
 
@@ -287,6 +287,7 @@ function DownloadProgress({ item }: { item: QueueItem }) {
     between_tracks: 'Preparando el siguiente paso',
     merging: 'Uniendo vídeo y audio',
     converting: 'Convirtiendo audio',
+    converting_video: 'Preparando MP4 compatible con Windows',
     finalizing: 'Finalizando archivo',
     retrying: 'Reintentando conexión',
   }[phase]
@@ -299,6 +300,7 @@ function DownloadProgress({ item }: { item: QueueItem }) {
     save: 'Guardar',
     mp3_audio: 'Audio MP3',
     convert: 'Convertir',
+    compatibility: 'Compatibilidad',
   }
 
   return (
@@ -1035,6 +1037,7 @@ function App() {
                       </button>
                     ))}
                   </div>
+                  {format !== 'audio' && <p className="format-compatibility">MP4 para Windows. Clipoteca convierte a H.264 cuando hace falta.</p>}
                 </fieldset>
 
                 <div className="quality-field">

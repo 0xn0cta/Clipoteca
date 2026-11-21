@@ -196,6 +196,34 @@ class ManagerTests(unittest.TestCase):
         self.assertEqual(state["history"], [])
         manager.shutdown(pause_active=False)
 
+    def test_batch_notification_summarizes_outcomes_once(self) -> None:
+        batch = {
+            "id": "batch-notification", "source_url": "https://www.youtube.com/playlist?list=sample",
+            "title": "Lista de prueba", "is_playlist": True, "destination": str(self.root),
+            "output_format": "video", "quality": "auto",
+        }
+        items = [
+            {"id": key, "source_id": key, "source_url": f"https://youtu.be/{key}", "title": key}
+            for key in ("new", "existing", "failure")
+        ]
+        self.database.create_batch(batch, items)
+        notices = []
+        manager = DownloadManager(
+            self.database, notifier=lambda title, text: notices.append((title, text)), autostart=False,
+        )
+        self.manager = manager
+        self.database.update_item("new", status="completed")
+        self.database.update_item("existing", status="completed", error="Ya existía; no se sobrescribió.")
+        manager._notify_batch_if_finished(batch["id"], batch["title"])
+        self.assertEqual(notices, [])
+
+        self.database.update_item("failure", status="failed", error="Fallo de prueba")
+        manager._notify_batch_if_finished(batch["id"], batch["title"])
+        manager._notify_batch_if_finished(batch["id"], batch["title"])
+        self.assertEqual(notices, [
+            ("Lote terminado con fallos", "Lista de prueba\n1 nuevos · 1 ya existentes · 1 por reintentar"),
+        ])
+
     def test_transient_failure_is_retried_three_times(self) -> None:
         calls = 0
         retry_states = []

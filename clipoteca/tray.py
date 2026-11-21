@@ -1,21 +1,71 @@
 from __future__ import annotations
 
 import ctypes
+import base64
+import json
 import logging
+import os
+import subprocess
 import threading
+import uuid
+from pathlib import Path
 from typing import Any
 
 from PIL import Image, ImageDraw
 
+from .storage import app_data_dir
+
 
 logger = logging.getLogger("clipoteca.tray")
+_icon_lock = threading.Lock()
+_TOAST_SCRIPT = r"""
+$ErrorActionPreference = 'Stop'
+$json = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String([Console]::In.ReadToEnd()))
+$data = ConvertFrom-Json -InputObject $json
+[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime] | Out-Null
+[Windows.UI.Notifications.ToastNotification, Windows.UI.Notifications, ContentType=WindowsRuntime] | Out-Null
+[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType=WindowsRuntime] | Out-Null
+$xml = New-Object Windows.Data.Xml.Dom.XmlDocument
+$xml.LoadXml('<toast duration="short"><visual><binding template="ToastGeneric"><image placement="appLogoOverride"/><text/><text/></binding></visual><audio silent="true"/></toast>')
+$xml.SelectSingleNode('//image').SetAttribute('src', [string]$data.icon)
+$xml.SelectSingleNode('//text[1]').InnerText = [string]$data.title
+$xml.SelectSingleNode('//text[2]').InnerText = [string]$data.message
+$toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
+$toast.Group = 'Clipoteca'
+$toast.Tag = [string]$data.tag
+[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Clipoteca').Show($toast)
+"""
+_ENCODED_TOAST_SCRIPT = base64.b64encode(_TOAST_SCRIPT.encode("utf-16-le")).decode("ascii")
+
+
+def _notification_icon() -> Path:
+    path = app_data_dir() / "notifications" / "clipoteca.png"
+    with _icon_lock:
+        if not path.is_file():
+            path.parent.mkdir(parents=True, exist_ok=True)
+            WindowsTray._make_icon().save(path, format="PNG")
+    return path
 
 
 def show_windows_notification(title: str, message: str) -> None:
     try:
-        from winotify import Notification
-
-        Notification(app_id="Clipoteca", title=title, msg=message).show()
+        data = {
+            "title": title,
+            "message": message,
+            "icon": _notification_icon().resolve().as_uri(),
+            "tag": uuid.uuid4().hex[:16],
+        }
+        # Deliver metadata as data through stdin. The PowerShell program is static.
+        payload = base64.b64encode(json.dumps(data, ensure_ascii=False).encode("utf-8"))
+        powershell = Path(os.environ["SystemRoot"]) / "System32/WindowsPowerShell/v1.0/powershell.exe"
+        subprocess.run(
+            [str(powershell), "-NoProfile", "-NonInteractive", "-EncodedCommand", _ENCODED_TOAST_SCRIPT],
+            input=payload,
+            capture_output=True,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            check=True,
+            timeout=8,
+        )
     except Exception:
         logger.exception("No se pudo mostrar la notificación de Windows")
 

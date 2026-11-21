@@ -218,6 +218,8 @@
 
 **Verificación:** tests con yt-dlp mock; smoke manual solo con URL autorizada, marcado como manual.
 **Reverificación de compatibilidad:** para MP4, el selector da prioridad a H.264 cuando está disponible y respeta el límite de resolución. Las pruebas con metadatos simulados cubren H.264, el fallback a AV1, el límite de altura y el rechazo de una fuente con solo audio. Pasaron 84 pruebas Python y 7 subpruebas. Se comprobó localmente la pista AV1 del archivo existente con FFmpeg, sin iniciar una descarga real.
+
+**Salida para Windows:** se comprueban las pistas del MP4 y se convierten a H.264 con color de 8 bits y a AAC si hace falta. La cola muestra la fase de compatibilidad cuando hay conversión. Pasaron 93 pruebas Python, 14 subpruebas, build, lint y smokes T39/T40 con datos simulados. Se probó la conversión, la conservación del original y la reutilización de la copia con un archivo de prueba local. FFprobe confirmó H.264 y AAC en la copia generada desde el Reel ya descargado. Sigue pendiente la prueba de descarga externa autorizada.
 **Dependencias:** T08, T11, T12, T13.
 **Archivos previstos:** `clipoteca/services/download.py`, `clipoteca/desktop_api.py`, `frontend/src/components/DownloadAction.tsx`, tests asociados.
 **Alcance:** M.
@@ -699,3 +701,15 @@
 
 **Resultado:** 90 pruebas Python, 13 subpruebas, build, lint y smoke T39 pasan. Se verificaron URLs y vistas con datos simulados. Queda pendiente la aceptación con publicaciones reales autorizadas.
 **Archivos:** motor, CLI, UI, documentación y pruebas.
+
+### T45 — Mejorar las notificaciones del sistema Windows
+
+**Descripción:** mostrar avisos nativos con la marca de Clipoteca y un resumen por lote, con nombre del vídeo o lista y resultado.
+
+**Criterios de aceptación:**
+- [x] Los avisos los emite Windows e incluyen el icono de Clipoteca.
+- [x] La descarga individual distingue éxito, archivo existente y fallo. La lista genera un solo resumen con los resultados.
+- [x] Los títulos se transportan como datos y se conservan los acentos y caracteres especiales.
+
+**Resultado:** 92 pruebas Python y 13 subpruebas pasan. En Windows, la API WinRT aceptó un aviso silencioso de prueba desde el notifier real. Sin descargas externas.
+**Archivos:** `clipoteca/tray.py`, `clipoteca/manager.py`, pruebas y dependencias.

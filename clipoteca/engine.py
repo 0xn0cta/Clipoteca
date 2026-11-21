@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -343,8 +347,8 @@ def _format_options(output_format: str, quality: str, *, allow_silent: bool = Fa
             "format": "bestaudio/best",
             "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
         })]
-    # MP4 is a container. Prefer YouTube's H.264 streams for Windows playback.
-    h264 = "[vcodec^=avc1]"
+    # Extractors label H.264 either as its codec name or an AVC sample entry.
+    h264 = "[vcodec~='(?i)^(?:avc1|avc3|h264)(?:[.]|$)']"
     mp4_with_audio = f"best[ext=mp4][vcodec!=?none][acodec!=?none]{height}"
     audio_track = "(bestaudio[ext=m4a]/bestaudio[ext=mp4])" if allow_silent else "bestaudio[ext=m4a]"
     video_selector = "/".join((
@@ -363,6 +367,113 @@ def _format_options(output_format: str, quality: str, *, allow_silent: bool = Fa
             "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
         })]
     return [video]
+
+
+def _probe_mp4(path: Path) -> tuple[bool, bool, bool]:
+    probe = shutil.which("ffprobe")
+    if not probe:
+        raise UserFacingError("Se necesita FFmpeg con ffprobe para verificar el MP4. Instálalo y vuelve a intentarlo.")
+    try:
+        result = subprocess.run(
+            [
+                probe, "-v", "error", "-show_entries",
+                "stream=codec_type,codec_name,pix_fmt:stream_disposition=attached_pic",
+                "-of", "json", str(path),
+            ],
+            capture_output=True, check=True, timeout=15,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        streams = json.loads(result.stdout)["streams"]
+    except (OSError, subprocess.SubprocessError, ValueError, KeyError) as exc:
+        raise UserFacingError("No se pudo verificar la pista de vídeo del MP4.") from exc
+    video = next((
+        item for item in streams
+        if item.get("codec_type") == "video" and not item.get("disposition", {}).get("attached_pic")
+    ), None)
+    if video is None:
+        raise UserFacingError("El archivo MP4 no contiene una pista de vídeo.")
+    audio = next((item for item in streams if item.get("codec_type") == "audio"), None)
+    return (
+        video.get("codec_name") == "h264" and video.get("pix_fmt") in {"yuv420p", "yuvj420p"},
+        audio is None or audio.get("codec_name") == "aac",
+        audio is not None,
+    )
+
+
+def _ensure_windows_mp4(
+    source: Path,
+    *,
+    replace_source: bool,
+    on_convert: Callable[[], None],
+    should_stop: Callable[[], str | None],
+) -> tuple[Path, bool]:
+    video_ok, audio_ok, has_audio = _probe_mp4(source)
+    if video_ok and audio_ok:
+        return source, not replace_source
+
+    target = source if replace_source else source.with_name(source.stem + " [H.264].mp4")
+    if not replace_source and target.exists():
+        if all(_probe_mp4(target)[:2]):
+            return target, True
+        raise UserFacingError("Ya existe una copia con ese nombre. Elige otra carpeta para generar el MP4 compatible.")
+
+    ffmpeg = shutil.which("ffmpeg")
+    if not ffmpeg:
+        raise UserFacingError("Se necesita FFmpeg para convertir este vídeo. Instálalo y vuelve a intentarlo.")
+    action = should_stop()
+    if action:
+        raise DownloadInterrupted(action)
+    on_convert()
+
+    with tempfile.TemporaryDirectory(prefix=".clipoteca-convert-", dir=target.parent) as directory:
+        output = Path(directory) / "compatible.mp4"
+        command = [ffmpeg, "-v", "error", "-nostdin", "-n", "-i", str(source), "-map", "0:V:0"]
+        if has_audio:
+            command.extend(("-map", "0:a:0", "-c:a", "copy" if audio_ok else "aac"))
+        if video_ok:
+            command.extend(("-c:v", "copy"))
+        else:
+            command.extend((
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "19", "-pix_fmt", "yuv420p",
+                "-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
+            ))
+        command.extend(("-movflags", "+faststart", str(output)))
+        try:
+            with tempfile.TemporaryFile() as errors, subprocess.Popen(
+                command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=errors,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+            ) as process:
+                while True:
+                    try:
+                        result = process.wait(timeout=0.25)
+                        break
+                    except subprocess.TimeoutExpired:
+                        action = should_stop()
+                        if action:
+                            process.kill()
+                            raise DownloadInterrupted(action)
+                if result:
+                    errors.seek(0)
+                    detail = errors.read(4096).decode("utf-8", errors="replace")
+                    logger.warning("FFmpeg no pudo preparar el MP4: %s", _redact_log_detail(detail))
+                    if "no space left" in detail.lower():
+                        raise UserFacingError("No hay espacio suficiente para crear el MP4 compatible. Libera espacio y vuelve a intentarlo.")
+                    raise UserFacingError("FFmpeg no pudo crear el MP4 compatible. Comprueba que incluya libx264 y vuelve a intentarlo.")
+            action = should_stop()
+            if action:
+                raise DownloadInterrupted(action)
+            if not all(_probe_mp4(output)[:2]):
+                raise UserFacingError("FFmpeg no generó un MP4 compatible con Windows.")
+            if replace_source:
+                output.replace(target)
+            else:
+                # Windows rename fails if another file already occupies the destination.
+                if target.exists():
+                    raise FileExistsError(target)
+                output.rename(target)
+        except OSError as exc:
+            raise UserFacingError("No se pudo guardar el MP4 compatible. Revisa los permisos y el espacio de destino.") from exc
+    return target, False
 
 
 def download_item(
@@ -394,6 +505,8 @@ def download_item(
                 steps.extend(("mp3_audio", "convert"))
             elif step == "silent_video":
                 steps.extend(("silent_video", "save"))
+            elif step == "compatibility":
+                steps.append(step)
             else:
                 steps.extend(("file", "save"))
         if step and finished:
@@ -412,8 +525,20 @@ def download_item(
     for stage_index, (stage, suffix, stage_options) in enumerate(stages):
         expected_ext = "mp3" if stage == "audio" else "mp4"
         expected = destination_path / f"{base_name}{suffix}.{expected_ext}"
+        def on_convert(*, current_stage: int = stage_index) -> None:
+            report_step(
+                {"progress": (current_stage + 1) / len(stages), "phase": "converting_video"},
+                "compatibility",
+            )
+
         if expected.is_file():
-            skipped.append(str(expected))
+            if stage == "video":
+                compatible, reused = _ensure_windows_mp4(
+                    expected, replace_source=False, on_convert=on_convert, should_stop=should_stop,
+                )
+                (skipped if reused else outputs).append(str(compatible))
+            else:
+                skipped.append(str(expected))
             continue
 
         last_progress_time = 0.0
@@ -536,11 +661,17 @@ def download_item(
                 f"No se generó el archivo final {expected.suffix.upper().lstrip('.')}. "
                 "Comprueba FFmpeg y vuelve a intentarlo desde la cola."
             )
+        if stage == "video":
+            expected, _ = _ensure_windows_mp4(
+                expected, replace_source=True, on_convert=on_convert, should_stop=should_stop,
+            )
         outputs.append(str(expected))
 
-    if not outputs and skipped:
-        return {"paths": skipped, "duplicate": True}
-    return {"paths": outputs + skipped, "duplicate": bool(skipped)}
+    return {
+        "paths": outputs + skipped,
+        "duplicate": bool(skipped),
+        "duplicate_only": bool(skipped and not outputs),
+    }
 
 
 def _friendly_error(error: Exception, *, action: str) -> str:

@@ -9,6 +9,8 @@ python -m clipoteca --version
 
 La CLI es independiente del lanzador gráfico y reutiliza los servicios locales, las preferencias y la cola SQLite. Admite vídeos y playlists de YouTube, Reels y publicaciones con un solo vídeo de Instagram y publicaciones de vídeo de Reddit accesibles sin iniciar sesión.
 
+El formato vídeo genera un MP4 H.264/AAC cuando hay audio. Si el origen usa otro códec, Clipoteca muestra una fase de compatibilidad en la cola y convierte las pistas necesarias con FFmpeg.
+
 ## Comandos
 
 | Comando | Función |
