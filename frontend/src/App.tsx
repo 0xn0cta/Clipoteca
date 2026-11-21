@@ -7,6 +7,7 @@ import {
   CalendarDays,
   Check,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
   CircleAlert,
   Clock3,
@@ -59,6 +60,14 @@ type Analysis = {
   extractor: string
   items: MediaItem[]
 }
+
+const analysisSteps = {
+  validating: 'Comprobar enlace',
+  extracting: 'Encontrar vídeos',
+  preparing: 'Preparar lista',
+} as const
+
+type AnalysisProgress = { phase: keyof typeof analysisSteps; found: number }
 
 type QueueItem = {
   id: string
@@ -128,7 +137,8 @@ type ApiResult<T = Record<string, unknown>> = { ok: boolean; error?: string } & 
 
 type DesktopApi = {
   get_app_status: () => Promise<{ desktop: boolean; download_engine_ready: boolean; ffmpeg_ready: boolean; message: string; tray_available: boolean }>
-  analyze_url: (url: string) => Promise<ApiResult<Analysis>>
+  analyze_url: (url: string, requestId: string) => Promise<ApiResult<Analysis>>
+  get_analysis_progress?: (requestId: string) => Promise<AnalysisProgress | null>
   get_preview: (analysisId: string, itemId: string, outputFormat: Format, quality: string) => Promise<ApiResult<Omit<PreviewResult, 'item_title'>>>
   enqueue_batch: (
     analysisId: string,
@@ -165,6 +175,7 @@ const defaultPreferences: Preferences = {
 
 const youtubeVideoIdPattern = /^[A-Za-z0-9_-]{11}$/
 const startupBannerMinMs = 1800
+const playlistPageSize = 25
 
 function getCachedThemeMode(): NonNullable<Preferences['theme_mode']> {
   try {
@@ -381,6 +392,7 @@ function App() {
   const [format, setFormat] = useState<Format>('video')
   const [quality, setQuality] = useState('auto')
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
+  const [playlistPage, setPlaylistPage] = useState(0)
   const [previewItem, setPreviewItem] = useState<MediaItem | null>(null)
   const [previewLoadState, setPreviewLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
@@ -394,7 +406,10 @@ function App() {
   const [historyQuery, setHistoryQuery] = useState('')
   const [notice, setNotice] = useState('')
   const clearNotice = useCallback(() => setNotice(''), [])
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [analysisRequest, setAnalysisRequest] = useState<string | null>(null)
+  const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress>({ phase: 'validating', found: 0 })
+  const isAnalyzing = analysisRequest !== null
+  const analysisStepIndex = Object.keys(analysisSteps).indexOf(analysisProgress.phase)
   const [isEnqueueing, setIsEnqueueing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewAccent, setPreviewAccent] = useState<ThemeAccent | null>(null)
@@ -414,7 +429,10 @@ function App() {
     () => analysis?.items.filter((item) => item.available) ?? [],
     [analysis],
   )
-  const allSelected = availableItems.length > 0 && availableItems.every((item) => selectedIds.includes(item.id))
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds])
+  const allSelected = availableItems.length > 0 && availableItems.length === selectedIds.length
+  const playlistPageStart = playlistPage * playlistPageSize
+  const playlistPageCount = Math.ceil((analysis?.items.length ?? 0) / playlistPageSize)
   const activeCount = queueState?.counts.active ?? 0
   const currentList = view === 'history' ? queueState?.history ?? [] : queueState?.queue ?? []
   const normalizedHistoryQuery = historyQuery.trim().toLocaleLowerCase('es')
@@ -529,7 +547,33 @@ function App() {
     }
   }, [api, startupAttempt])
 
+  useEffect(() => {
+    const getProgress = api?.get_analysis_progress
+    if (!analysisRequest || !getProgress) return
+
+    let disposed = false
+    let timer: number
+    const refresh = async () => {
+      try {
+        const snapshot = await getProgress(analysisRequest)
+        if (!disposed && snapshot) {
+          setAnalysisProgress((current) => current.phase === snapshot.phase && current.found === snapshot.found ? current : snapshot)
+        }
+      } catch {
+        // The analysis response itself reports any errors.
+      } finally {
+        if (!disposed) timer = window.setTimeout(refresh, 400)
+      }
+    }
+    timer = window.setTimeout(refresh, 200)
+    return () => {
+      disposed = true
+      window.clearTimeout(timer)
+    }
+  }, [api, analysisRequest])
+
   async function analyzeUrl() {
+    if (isAnalyzing) return
     if (!api) {
       setNotice('El análisis y las descargas están disponibles al abrir Clipoteca para escritorio.')
       return
@@ -538,14 +582,17 @@ function App() {
       setNotice('Pega un enlace para analizarlo.')
       return
     }
-    setIsAnalyzing(true)
+    const requestId = crypto.randomUUID()
+    setAnalysisRequest(requestId)
+    setAnalysisProgress({ phase: 'validating', found: 0 })
     setNotice('')
     setAnalysis(null)
+    setPlaylistPage(0)
     setPreviewItem(null)
     setPreviewLoadState('idle')
     setSelectedIds([])
     try {
-      const result = await api.analyze_url(url)
+      const result = await api.analyze_url(url, requestId)
       if (!result.ok) {
         setNotice(result.error ?? 'No se pudo analizar el enlace.')
         return
@@ -558,7 +605,7 @@ function App() {
     } catch {
       setNotice('No se pudo conectar con el motor de análisis.')
     } finally {
-      setIsAnalyzing(false)
+      setAnalysisRequest(null)
     }
   }
 
@@ -860,7 +907,24 @@ function App() {
                   <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               </form>
-              <p className="source-hint">Los elementos se revisan antes de iniciar la descarga.</p>
+              {isAnalyzing ? (
+                <div className="analysis-progress">
+                  <ol className="analysis-progress-steps" aria-label="Fases del análisis">
+                    {Object.entries(analysisSteps).map(([phase, label], index) => (
+                      <li key={phase} aria-current={index === analysisStepIndex ? 'step' : undefined}>
+                        {index < analysisStepIndex ? <Check size={14} aria-hidden="true" /> : <span aria-hidden="true" />}
+                        {label}
+                      </li>
+                    ))}
+                  </ol>
+                  <p role="status">
+                    <span className="visually-hidden">{analysisSteps[analysisProgress.phase]}. </span>
+                    {analysisProgress.found > 0
+                      ? `${analysisProgress.found} ${analysisProgress.found === 1 ? 'vídeo encontrado' : 'vídeos encontrados'}`
+                      : 'Esperando resultados…'}
+                  </p>
+                </div>
+              ) : <p className="source-hint">Los elementos se revisan antes de iniciar la descarga.</p>}
             </section>
 
             <div className="demo-disclosure" role="note">
@@ -873,11 +937,11 @@ function App() {
                 <header className="playlist-heading">
                   <div>
                     <div className="playlist-title-line">
-                      <h2 id="playlist-title">{analysis?.title ?? 'Contenido por analizar'}</h2>
+                      <h2 id="playlist-title">{analysis?.title ?? (isAnalyzing ? 'Lista de vídeos' : 'Contenido por analizar')}</h2>
                       {analysis && <span className="sample-badge">{analysis.is_playlist ? 'Playlist' : 'Video'}</span>}
                       {analysis && <SourceMark sourceUrl={analysis.source_url} />}
                     </div>
-                    <p>{analysis ? `${analysis.items.length} elementos · ${analysis.extractor || 'yt-dlp'}` : 'El manifiesto aparecerá aquí después del análisis'}</p>
+                    <p>{analysis ? `${analysis.items.length} ${analysis.items.length === 1 ? 'vídeo encontrado' : 'vídeos encontrados'}` : 'Los vídeos encontrados aparecerán aquí.'}</p>
                   </div>
                   {analysis && <div className="playlist-heading-actions">
                     <span className="availability-summary">{availableItems.length} disponibles</span>
@@ -897,6 +961,21 @@ function App() {
                       </button>
                     </div>
 
+                    {playlistPageCount > 1 && (
+                      <nav className="playlist-pagination" aria-label="Páginas de la playlist">
+                        <p role="status">Vídeos {playlistPageStart + 1}–{Math.min(playlistPageStart + playlistPageSize, analysis.items.length)} de {analysis.items.length}</p>
+                        <div>
+                          <button type="button" aria-label="Página anterior" disabled={playlistPage === 0} onClick={() => setPlaylistPage(playlistPage - 1)}>
+                            <ChevronLeft size={16} aria-hidden="true" />
+                          </button>
+                          <span>Página {playlistPage + 1} de {playlistPageCount}</span>
+                          <button type="button" aria-label="Página siguiente" disabled={playlistPage + 1 === playlistPageCount} onClick={() => setPlaylistPage(playlistPage + 1)}>
+                            <ChevronRight size={16} aria-hidden="true" />
+                          </button>
+                        </div>
+                      </nav>
+                    )}
+
                     <div className="media-list-wrap">
                       <table className="media-list">
                         <thead><tr>
@@ -906,8 +985,8 @@ function App() {
                           <th className="status-column" scope="col">Estado</th>
                         </tr></thead>
                         <tbody>
-                          {analysis.items.map((item) => {
-                            const checked = selectedIds.includes(item.id)
+                          {analysis.items.slice(playlistPageStart, playlistPageStart + playlistPageSize).map((item) => {
+                            const checked = selectedIdSet.has(item.id)
                             const isPreviewOpen = previewItem?.id === item.id
                             const platform = sourceLabel(item.source_url)
                             return (
@@ -917,25 +996,27 @@ function App() {
                                   <span className="custom-check" aria-hidden="true"><Check size={12} strokeWidth={2.5} /></span>
                                 </label></td>
                                 <td className="title-cell">
-                                  <button
-                                    className="thumbnail-preview"
-                                    type="button"
-                                    aria-label={`Abrir vista previa de ${item.title} en ${platform}`}
-                                    aria-current={isPreviewOpen || undefined}
-                                    title={`Vista previa de ${item.title}`}
-                                    disabled={!item.source_url || (platform === 'YouTube' && !youtubeVideoIdPattern.test(item.source_id))}
-                                    onClick={(event) => openPreview(item, event.currentTarget)}
-                                  >
-                                    <span className="thumbnail-fallback" aria-hidden="true"><ListVideo size={16} /></span>
-                                    {item.thumbnail && <img src={item.thumbnail} alt="" onError={(event) => { event.currentTarget.style.visibility = 'hidden' }} />}
-                                    <span className="thumbnail-play" aria-hidden="true">
-                                      {isPreviewOpen ? <MonitorPlay size={19} /> : <Play size={14} fill="currentColor" />}
+                                  <div className="item-media">
+                                    <button
+                                      className="thumbnail-preview"
+                                      type="button"
+                                      aria-label={`Abrir vista previa de ${item.title} en ${platform}`}
+                                      aria-current={isPreviewOpen || undefined}
+                                      title={`Vista previa de ${item.title}`}
+                                      disabled={!item.source_url || (platform === 'YouTube' && !youtubeVideoIdPattern.test(item.source_id))}
+                                      onClick={(event) => openPreview(item, event.currentTarget)}
+                                    >
+                                      <span className="thumbnail-fallback" aria-hidden="true"><ListVideo size={16} /></span>
+                                      {item.thumbnail && <img src={item.thumbnail} alt="" loading="lazy" decoding="async" onError={(event) => { event.currentTarget.style.visibility = 'hidden' }} />}
+                                      <span className="thumbnail-play" aria-hidden="true">
+                                        {isPreviewOpen ? <MonitorPlay size={19} /> : <Play size={14} fill="currentColor" />}
+                                      </span>
+                                    </button>
+                                    <span className="item-copy">
+                                      <span className="item-title" title={item.title}>{item.title}</span>
+                                      <span className="item-number">Elemento {String(item.index).padStart(2, '0')}</span>
                                     </span>
-                                  </button>
-                                  <span className="item-copy">
-                                    <span className="item-title">{item.title}</span>
-                                    <span className="item-number">Elemento {String(item.index).padStart(2, '0')}</span>
-                                  </span>
+                                  </div>
                                 </td>
                                 <td className="item-duration"><Clock3 size={14} strokeWidth={1.7} aria-hidden="true" />{formatDuration(item.duration)}</td>
                                 <td><span className={`availability ${item.available ? 'is-available' : 'is-unavailable'}`}>
@@ -955,7 +1036,7 @@ function App() {
                 ) : (
                   <div className="analysis-empty">
                     <span className="empty-icon"><ListVideo size={23} strokeWidth={1.5} aria-hidden="true" /></span>
-                    <p>Analiza una URL para revisar los elementos disponibles antes de guardarlos.</p>
+                    <p>{isAnalyzing ? 'Podrás elegir qué guardar cuando termine el análisis.' : 'Analiza una URL para revisar los elementos disponibles antes de guardarlos.'}</p>
                   </div>
                 )}
               </section>

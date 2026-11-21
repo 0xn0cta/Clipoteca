@@ -15,6 +15,7 @@ from urllib.error import URLError
 from urllib.request import HTTPRedirectHandler, build_opener
 
 from yt_dlp import YoutubeDL
+from yt_dlp.postprocessor.common import PostProcessor
 
 
 logger = logging.getLogger("clipoteca.engine")
@@ -159,12 +160,31 @@ def _info_options() -> dict[str, Any]:
     }
 
 
-def analyze_url(url: str) -> dict[str, Any]:
+class _AnalysisEntryCounter(PostProcessor):
+    def __init__(self, report: Callable[[str, int], None]) -> None:
+        super().__init__()
+        self.report = report
+        self.found = 0
+
+    def run(self, info: dict[str, Any]) -> tuple[list[str], dict[str, Any]]:
+        self.found += 1
+        self.report("extracting", self.found)
+        return [], info
+
+
+def analyze_url(url: str, *, on_progress: Callable[[str, int], None] | None = None) -> dict[str, Any]:
     source = _resolve_source_url(url)
     options = _info_options()
     ytdlp_log = options["logger"]
+    counter = None
+    if on_progress is not None:
+        on_progress("extracting", 0)
+        options["lazy_playlist"] = True
+        counter = _AnalysisEntryCounter(on_progress)
     try:
         with YoutubeDL(options) as ydl:
+            if counter is not None:
+                ydl.add_post_processor(counter, when="pre_process")
             info = ydl.extract_info(source, download=False)
     except Exception as exc:
         diagnostic = RuntimeError(" ".join([str(exc), *ytdlp_log.errors]))
@@ -182,8 +202,10 @@ def analyze_url(url: str) -> dict[str, Any]:
     entries = info.get("entries")
     if entries is not None and _source_platform(urlsplit(source).hostname or "") != "youtube":
         raise UserFacingError("Esta publicación contiene varias piezas. Usa un enlace directo a un solo vídeo.")
+    if counter is not None:
+        counter.report("preparing", counter.found)
     is_playlist = entries is not None
-    source_entries = list(entries) if is_playlist else [info]
+    source_entries = entries if is_playlist else [info]
     items: list[dict[str, Any]] = []
     for index, entry in enumerate(source_entries, start=1):
         if not isinstance(entry, dict):

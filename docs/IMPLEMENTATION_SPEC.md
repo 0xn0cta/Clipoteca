@@ -151,7 +151,7 @@ No serializar callbacks, instancias `YoutubeDL`, excepciones ni rutas arbitraria
 ### Métodos previstos
 
 - `get_app_status()`
-- `analyze_url(url)`
+- `analyze_url(url, request_id?)` / `get_analysis_progress(request_id)`
 - `get_preview(analysis_id, item_id, output_format, quality)`
 - `enqueue_batch(analysis_id, selected_ids, output_format, quality)`
 - `get_queue_state()` / `get_preferences()`
@@ -169,6 +169,7 @@ La UI actual consulta `get_queue_state()` de forma periódica. El MVP debe mante
 ### Payloads de estado
 
 - `get_queue_state()` devuelve `queue`, `history`, `counts` y `preferences`.
+- Durante el análisis, `get_analysis_progress(request_id)` devuelve `phase` (`validating`, `extracting` o `preparing`) y `found` (entradas detectadas hasta ese momento). El estado es temporal y está ligado a la petición. La respuesta final sigue entregando todas las entradas en orden. La interfaz muestra 25 filas por página y conserva la selección global.
 - Cada tarea mantiene ID estable, batch, estado, progreso nullable, bytes/ETA cuando existen, rutas finales y error legible.
 - La UI actual consulta el snapshot cada 1.2 segundos. Mantenerlo mientras sea estable; sustituirlo por eventos solo si se documenta el contrato y se evita polling duplicado.
 - El hilo visual nunca espera un análisis o una descarga.

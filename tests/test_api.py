@@ -4,14 +4,42 @@ import tempfile
 import time
 import unittest
 import json
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Event
 from unittest.mock import patch
 
-from clipoteca.api import DesktopApi
+from clipoteca.api import DesktopApi, UserFacingError
 
 
 class DesktopApiTests(unittest.TestCase):
+    def test_analysis_progress_is_request_scoped_and_removed_after_failure(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            api = DesktopApi(database_path=Path(directory) / "db.sqlite3")
+            started = Event()
+            release = Event()
+
+            def fail_after_progress(_url, *, on_progress):
+                on_progress("extracting", 12)
+                started.set()
+                release.wait(3)
+                raise UserFacingError("No se pudo analizar.")
+
+            try:
+                with patch("clipoteca.api.analyze_url", side_effect=fail_after_progress), ThreadPoolExecutor() as worker:
+                    result = worker.submit(api.analyze_url, "https://www.youtube.com/playlist?list=sample", "sample")
+                    try:
+                        self.assertTrue(started.wait(3))
+                        self.assertEqual(api.get_analysis_progress("sample"), {"phase": "extracting", "found": 12})
+                        self.assertIsNone(api.get_analysis_progress("other"))
+                        self.assertFalse(api.analyze_url("https://www.youtube.com/", "sample")["ok"])
+                    finally:
+                        release.set()
+                    self.assertEqual(result.result(timeout=3), {"ok": False, "error": "No se pudo analizar."})
+                    self.assertIsNone(api.get_analysis_progress("sample"))
+            finally:
+                api.shutdown()
+
     def test_analysis_can_be_queued_through_the_desktop_bridge(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             api = DesktopApi(database_path=Path(directory) / "db.sqlite3")

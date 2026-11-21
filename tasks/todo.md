@@ -713,3 +713,14 @@
 
 **Resultado:** 92 pruebas Python y 13 subpruebas pasan. En Windows, la API WinRT aceptó un aviso silencioso de prueba desde el notifier real. Sin descargas externas.
 **Archivos:** `clipoteca/tray.py`, `clipoteca/manager.py`, pruebas y dependencias.
+
+### T47 — Mostrar el progreso del análisis y aligerar las listas largas
+
+**Dependencias:** T07–T10 y T39.
+**Criterios de aceptación:**
+- [x] La interfaz indica qué fase del análisis está activa y cuenta las entradas al recibirlas.
+- [x] Las listas muestran un máximo de 25 filas por página y cargan miniaturas según se acercan a la zona visible. Se conserva la selección global y el orden.
+- [x] Las filas tienen separación vertical y admiten dos líneas de título. El reproductor tiene un marco interior redondeado sin desbordamiento en ventana compacta.
+
+**Resultado:** 96 pruebas Python y 14 subpruebas en el árbol compartido. Build, lint y smokes T39/T40 correctos. El smoke verificó tres fases y paginación con 723 entradas simuladas, selección entre páginas y layouts de 1440 y 390 px. La prueba Python verifica el recuento a medida que yt-dlp procesa un extractor simulado. Sin descarga externa ni prueba manual con la lista real.
+**Archivos:** `clipoteca/api.py`, `clipoteca/engine.py`, `frontend/src/App.tsx`, `frontend/src/App.css`, especificación y pruebas.

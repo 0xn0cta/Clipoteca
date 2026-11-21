@@ -526,6 +526,64 @@ button {
   min-width: 0;
 }
 
+.analysis-progress {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 20px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.analysis-progress-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.analysis-progress-steps li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.analysis-progress-steps li > span {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+}
+
+.analysis-progress-steps li[aria-current="step"] {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.analysis-progress-steps li[aria-current="step"] > span {
+  border-color: var(--accent-border);
+  border-top-color: var(--accent-soft);
+  animation: startup-spin 850ms linear infinite;
+}
+
+.analysis-progress-steps svg,
+.analysis-progress p {
+  color: var(--accent-soft);
+}
+
+.analysis-progress p {
+  margin: 0;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
 .playlist-heading {
   display: flex;
   align-items: flex-end;
@@ -685,12 +743,57 @@ button {
   color: var(--accent-soft);
 }
 
+.playlist-pagination,
+.playlist-pagination > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.playlist-pagination {
+  flex-wrap: wrap;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.playlist-pagination p {
+  margin: 0;
+}
+
+.playlist-pagination button {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.playlist-pagination button:hover:not(:disabled) {
+  background: var(--surface-hover);
+}
+
+.playlist-pagination button:disabled {
+  color: var(--text-muted);
+  opacity: 0.55;
+  cursor: default;
+}
+
 .media-list-wrap {
   overflow-x: auto;
 }
 
 .media-list {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
   text-align: left;
 }
@@ -708,7 +811,7 @@ button {
 }
 
 .media-list td {
-  height: 71px;
+  padding-block: 10px;
   border-top: 1px solid var(--line);
 }
 
@@ -733,18 +836,19 @@ button {
 }
 
 .duration-column {
-  width: 88px;
+  width: 76px;
 }
 
 .status-column {
-  width: 118px;
+  width: 94px;
 }
 
-.title-cell {
+.item-media {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   min-width: 0;
+  padding-right: 10px;
 }
 
 .thumbnail-preview {
@@ -756,7 +860,7 @@ button {
   height: 70px;
   padding: 0;
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
+  border-radius: 10px;
   background: var(--surface-raised);
   cursor: pointer;
 }
@@ -827,9 +931,15 @@ button {
 }
 
 .item-title {
+  display: -webkit-box;
   color: var(--text);
   font-size: 13px;
   font-weight: 550;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .item-number {
@@ -1830,7 +1940,7 @@ button {
   overflow: hidden;
   min-width: 0;
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: 16px;
   background: var(--surface);
 }
 
@@ -1840,8 +1950,7 @@ button {
   justify-content: space-between;
   gap: 12px;
   min-height: 47px;
-  padding: 7px 13px;
-  border-bottom: 1px solid var(--line);
+  padding: 7px 14px;
 }
 
 .preview-panel-heading h2 {
@@ -1856,7 +1965,9 @@ button {
   display: grid;
   overflow: hidden;
   place-items: center;
-  width: 100%;
+  width: calc(100% - 24px);
+  margin-inline: 12px;
+  border-radius: 11px;
   aspect-ratio: 16 / 9;
   min-height: 200px;
   background: var(--player-bg);
@@ -2772,7 +2883,7 @@ button {
     align-items: start;
     column-gap: 10px;
     min-height: 94px;
-    padding: 8px 0;
+    padding: 12px 0;
   }
 
   .media-list td {
@@ -2793,13 +2904,14 @@ button {
   }
 
   .media-list .title-cell {
-    display: grid;
     grid-column: 2;
     grid-row: 1;
+  }
+
+  .item-media {
+    display: grid;
     grid-template-columns: 120px minmax(0, 1fr);
-    align-items: center;
     gap: 10px;
-    max-width: none;
   }
 
   .thumbnail-preview {

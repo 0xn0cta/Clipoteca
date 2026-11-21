@@ -71,6 +71,33 @@ class EngineTests(unittest.TestCase):
         self.assertEqual([item["title"] for item in result["items"]], ["First", "Second"])
         self.assertTrue(all(item["available"] for item in result["items"]))
 
+    def test_analysis_counts_playlist_entries_as_they_arrive(self) -> None:
+        snapshots: list[tuple[str, int]] = []
+
+        def entries():
+            for index in range(1, 4):
+                yield {
+                    "_type": "url", "ie_key": "Youtube", "id": str(index),
+                    "url": f"https://www.youtube.com/watch?v={index}", "title": f"Video {index}",
+                }
+                self.assertEqual(snapshots[-1], ("extracting", index))
+
+        def extract_info(ydl, url, *, download):
+            self.assertFalse(download)
+            return ydl.process_ie_result({
+                "_type": "playlist", "id": "sample", "title": "Example", "entries": entries(),
+                "extractor": "youtube:tab", "extractor_key": "YoutubeTab", "webpage_url": url,
+            }, download=download)
+
+        with patch.object(YoutubeDL, "extract_info", autospec=True, side_effect=extract_info):
+            result = analyze_url(
+                "https://www.youtube.com/playlist?list=sample",
+                on_progress=lambda phase, found: snapshots.append((phase, found)),
+            )
+
+        self.assertEqual([item["title"] for item in result["items"]], ["Video 1", "Video 2", "Video 3"])
+        self.assertEqual(snapshots, [("extracting", count) for count in range(4)] + [("preparing", 3)])
+
     def test_social_posts_use_canonical_downloadable_links(self) -> None:
         class FakePost(FakeYoutubeDL):
             def __init__(self, options):

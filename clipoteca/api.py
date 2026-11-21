@@ -24,6 +24,7 @@ class DesktopApi:
         self.database = Database(database_path)
         self.manager = DownloadManager(self.database, notifier)
         self._analyses: dict[str, dict[str, Any]] = {}
+        self._analysis_progress: dict[str, dict[str, str | int]] = {}
         self._analysis_lock = threading.Lock()
         self._window: Any = None
         self._pywebview: Any = None
@@ -43,20 +44,39 @@ class DesktopApi:
             "tray_available": self.tray_available,
         }
 
-    def analyze_url(self, url: str) -> dict[str, Any]:
+    def analyze_url(self, url: str, request_id: str | None = None) -> dict[str, Any]:
+        def report(phase: str, found: int) -> None:
+            with self._analysis_lock:
+                self._analysis_progress[request_id] = {"phase": phase, "found": found}
+
+        if request_id is not None:
+            if not isinstance(request_id, str) or not 1 <= len(request_id) <= 64:
+                return {"ok": False, "error": "Identificador de análisis no válido."}
+            with self._analysis_lock:
+                if request_id in self._analysis_progress:
+                    return {"ok": False, "error": "Este análisis ya está en curso."}
+                self._analysis_progress[request_id] = {"phase": "validating", "found": 0}
         try:
-            analysis = analyze_url(url)
+            analysis = analyze_url(url, on_progress=report) if request_id is not None else analyze_url(url)
         except UserFacingError as exc:
             return {"ok": False, "error": str(exc)}
         except Exception:
             logger.exception("Error inesperado al analizar una URL")
             return {"ok": False, "error": "No se pudo analizar el enlace. Consulta el registro local para más detalles."}
+        finally:
+            if request_id is not None:
+                with self._analysis_lock:
+                    self._analysis_progress.pop(request_id, None)
         analysis_id = str(uuid.uuid4())
         with self._analysis_lock:
             self._analyses[analysis_id] = analysis
             if len(self._analyses) > 20:
                 self._analyses.pop(next(iter(self._analyses)))
         return {"ok": True, "analysis_id": analysis_id, **analysis}
+
+    def get_analysis_progress(self, request_id: str) -> dict[str, str | int] | None:
+        with self._analysis_lock:
+            return self._analysis_progress.get(request_id) if isinstance(request_id, str) else None
 
     def enqueue_batch(
         self,

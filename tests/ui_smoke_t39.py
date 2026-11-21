@@ -136,6 +136,12 @@ def main() -> None:
                 "(el) => ({ width: el.getBoundingClientRect().width, height: el.getBoundingClientRect().height })"
             )
             assert player_size["width"] >= 200 and player_size["height"] >= 200, player_size
+            player_insets = page.locator(".preview-player").evaluate("""(element) => {
+                const player = element.getBoundingClientRect();
+                const panel = element.parentElement.getBoundingClientRect();
+                return [player.left - panel.left, panel.right - player.right];
+            }""")
+            assert min(player_insets) >= 12 and abs(player_insets[0] - player_insets[1]) <= 1, player_insets
             expect(first_checkbox).not_to_be_checked()
             expect(page.get_by_text("1 de 2 seleccionados")).to_be_visible()
             expect(page.locator(".preview-metadata")).to_contain_text("1:34")
@@ -185,13 +191,71 @@ def main() -> None:
                 expect(preview_panel.get_by_text("Miniatura de la publicación.")).to_be_visible()
                 expect(preview_panel.locator("iframe")).to_have_count(0)
 
+            page.set_viewport_size({"width": 1440, "height": 920})
+            page.evaluate("""(thumbnail) => {
+                const api = window.pywebview.api;
+                api.analyze_url = (source_url, requestId) => new Promise((resolve) => {
+                    window.analysisRequest = requestId;
+                    window.finishAnalysis = () => resolve({
+                        ok: true, analysis_id: 'large', title: 'Catálogo de prueba', source_url,
+                        is_playlist: true, extractor: 'youtube',
+                        items: Array.from({ length: 723 }, (_, index) => ({
+                            id: `entry-${index}`, source_id: 'abcdefghijk', source_url,
+                            title: index === 0 ? 'Un título muy largo para comprobar cómo se reparte el texto en la fila del catálogo' : `Vídeo ${index + 1}`,
+                            duration: 94, available: true, index: index + 1, thumbnail,
+                        })),
+                    });
+                });
+                window.analysisProgress = { phase: 'validating', found: 0 };
+                api.get_analysis_progress = async (requestId) => (
+                    requestId === window.analysisRequest ? window.analysisProgress : null
+                );
+            }""", THUMBNAIL)
+            page.locator("#source-url").fill("https://www.youtube.com/playlist?list=large")
+            page.get_by_role("button", name="Analizar enlace").click()
+            progress = page.locator(".analysis-progress")
+            expect(progress.locator('[aria-current="step"]')).to_have_text("Comprobar enlace")
+            expect(progress.get_by_role("status")).to_contain_text("Esperando resultados…")
+            page.evaluate("window.analysisProgress = { phase: 'extracting', found: 48 }")
+            expect(progress.locator('[aria-current="step"]')).to_have_text("Encontrar vídeos")
+            expect(progress.get_by_role("status")).to_contain_text("48 vídeos encontrados")
+            page.screenshot(path=str(CAPTURES / "t47-analysis-desktop.png"))
+            page.evaluate("window.analysisProgress = { phase: 'preparing', found: 723 }")
+            expect(progress.locator('[aria-current="step"]')).to_have_text("Preparar lista")
+            expect(progress.get_by_role("status")).to_contain_text("723 vídeos encontrados")
+            page.evaluate("window.finishAnalysis()")
+            expect(progress).to_have_count(0)
+            expect(page.get_by_text("723 vídeos encontrados", exact=True)).to_be_visible()
+            paging = page.get_by_role("navigation", name="Páginas de la playlist")
+            rows = page.locator(".media-list tbody tr")
+            expect(rows).to_have_count(25)
+            assert rows.first.locator(".thumbnail-preview").bounding_box()["height"] + 18 <= rows.first.bounding_box()["height"]
+            expect(rows.first.locator("img")).to_have_attribute("loading", "lazy")
+            rows.first.get_by_role("checkbox").uncheck()
+            next_page = paging.get_by_role("button", name="Página siguiente")
+            next_page.click()
+            expect(paging.get_by_role("status")).to_have_text("Vídeos 26–50 de 723")
+            expect(page.get_by_text("722 de 723 seleccionados")).to_be_visible()
+            paging.get_by_role("button", name="Página anterior").click()
+            expect(rows.first.get_by_role("checkbox")).not_to_be_checked()
+            page.screenshot(path=str(CAPTURES / "t47-playlist-desktop.png"))
+            for _ in range(28):
+                next_page.click()
+            expect(paging.get_by_role("status")).to_have_text("Vídeos 701–723 de 723")
+            expect(rows).to_have_count(23)
+            expect(next_page).to_be_disabled()
+            page.set_viewport_size({"width": 390, "height": 844})
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            paging.scroll_into_view_if_needed()
+            page.screenshot(path=str(CAPTURES / "t47-playlist-compact.png"))
+
             context.close()
             browser.close()
     finally:
         server.shutdown()
         server.server_close()
 
-    print("Playlist thumbnails, embedded-player mock, independent selection, and compact layout passed.")
+    print("Playlist thumbnails, embedded player, analysis progress, and pagination passed at desktop and compact sizes.")
 
 
 if __name__ == "__main__":
