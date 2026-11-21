@@ -12,7 +12,6 @@ from clipoteca.windows_path import refresh_windows_user_path
 ROOT = Path(__file__).resolve().parent
 FRONTEND_URL = "http://127.0.0.1:5173"
 BUILT_FRONTEND = ROOT / "frontend" / "dist" / "index.html"
-APP_ICON = ROOT / "packaging" / "clipoteca.ico"
 
 
 def configure_logging() -> None:
@@ -79,7 +78,6 @@ def main() -> None:
         fullscreen=False,
         min_size=(800, 640),
         background_color="#100B0D",
-        icon=str(APP_ICON),
     )
     api.attach_window(window, webview)
 

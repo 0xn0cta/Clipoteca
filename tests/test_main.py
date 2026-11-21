@@ -75,5 +75,5 @@ def test_main_uses_pywebview_http_server_for_built_frontend() -> None:
     assert window_options["resizable"] is True
     assert window_options["frameless"] is False
     assert window_options["maximized"] is False
-    assert window_options["icon"] == str(main.APP_ICON)
+    assert "icon" not in window_options
     webview.start.assert_called_once_with(debug=False, http_server=True)
