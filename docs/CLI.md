@@ -7,7 +7,7 @@ python -m clipoteca.cli --help
 python -m clipoteca --version
 ```
 
-La CLI es independiente del lanzador gráfico y no importa ni inicia pywebview. Reutiliza los servicios locales, las preferencias y la cola SQLite. Solo admite YouTube; no acepta cookies ni credenciales, no elude DRM y no ejecuta comandos arbitrarios.
+La CLI es independiente del lanzador gráfico y reutiliza los servicios locales, las preferencias y la cola SQLite. Admite vídeos y playlists de YouTube, Reels y publicaciones con un solo vídeo de Instagram y publicaciones de vídeo de Reddit accesibles sin iniciar sesión.
 
 ## Comandos
 

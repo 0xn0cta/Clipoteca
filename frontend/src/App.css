@@ -126,7 +126,7 @@ button {
 }
 
 .sidebar-nav-item.is-active .sidebar-nav-icon {
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .sidebar-nav-icon {
@@ -180,7 +180,7 @@ button {
 }
 
 .engine-status.is-ready .engine-status-icon {
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .engine-status.is-offline .engine-status-icon {
@@ -431,7 +431,7 @@ button {
 
 .source-control > svg {
   flex: none;
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .source-control input {
@@ -493,7 +493,7 @@ button {
 .demo-disclosure > svg {
   flex: none;
   margin-top: 1px;
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .demo-disclosure p {
@@ -561,8 +561,12 @@ button {
 
 .source-mark svg {
   flex: none;
-  color: var(--accent-soft);
+  color: var(--text-muted);
 }
+
+.source-mark[data-platform="youtube"] svg { color: light-dark(#B52138, #EF6476); }
+.source-mark[data-platform="instagram"] svg { color: light-dark(#A52C64, #EE79AC); }
+.source-mark[data-platform="reddit"] svg { color: light-dark(#AF391D, #FC815C); }
 
 .playlist-heading h2 {
   margin: 0;
@@ -1072,7 +1076,7 @@ button {
 
 .destination-button > svg:first-child {
   flex: none;
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .destination-button > span {
@@ -1138,6 +1142,10 @@ button {
 }
 
 .collection-note svg {
+  color: var(--icon-accent);
+}
+
+.collection-note svg {
   flex: none;
 }
 
@@ -1164,7 +1172,7 @@ button {
   height: 38px;
   border: 1px solid var(--line);
   border-radius: 50%;
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .download-summary > div {
@@ -1286,7 +1294,7 @@ button {
   margin-bottom: 20px;
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .queue-empty h2 {
@@ -1847,13 +1855,18 @@ button {
   background: var(--player-bg);
 }
 
-.preview-player iframe {
+.preview-player iframe,
+.preview-source-image {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   border: 0;
   background: var(--player-bg);
+}
+
+.preview-source-image {
+  object-fit: contain;
 }
 
 .preview-empty {
@@ -2198,7 +2211,7 @@ button {
 
 .history-metadata svg {
   flex: none;
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .download-row-path {
@@ -2360,7 +2373,7 @@ button {
 
 .queue-elapsed svg {
   flex: none;
-  color: var(--accent-soft);
+  color: var(--icon-accent);
 }
 
 .progress-line > span {
@@ -2489,7 +2502,7 @@ button {
   margin-bottom: 17px;
   border: 1px solid var(--accent-border);
   border-radius: 50%;
-  color: var(--accent);
+  color: var(--icon-accent);
 }
 
 .dialog-panel h2 {

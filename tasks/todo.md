@@ -668,6 +668,7 @@
 
 **Verificación:** persistencia al reiniciar, inspección de contraste en ambos temas y navegación por teclado.
 **Resultado:** 88 pruebas Python y 10 subpruebas pasan, incluida la reapertura del puente con SQLite temporal. Build, lint y smokes T39/T40 pasan. El smoke cubre teclado, cancelar la previsualización, guardar el acento y contraste de las cinco muestras en claro y oscuro.
+**Paletas de superficie:** los colores también cambian el fondo, la barra lateral, los paneles, los campos y los botones. El smoke comprueba en Claro y Oscuro que cambian los fondos, que el texto mantiene contraste y que el color de los iconos permanece estable.
 **Dependencias:** T36, T37, T41.
 **Archivos previstos:** ajustes del frontend, tokens de color, preferencias locales y pruebas.
 **Alcance:** M.
@@ -686,3 +687,15 @@
 **Dependencias:** T38, T40.
 **Archivos previstos:** `frontend/src/App.tsx`, `frontend/src/App.css`, `tests/ui_smoke_t40.py`.
 **Alcance:** S.
+
+### T44 — Admitir vídeo público de Instagram y Reddit
+
+**Descripción:** extender la lista de fuentes a Reels y publicaciones de Instagram con un solo vídeo y publicaciones de vídeo de Reddit.
+
+**Criterios de aceptación:**
+- [x] GUI y CLI comparten validación de fuentes y admiten enlaces directos y enlaces compartidos que resuelven en su plataforma.
+- [x] La fuente se identifica con su icono y un nombre accesible en preparación, cola e historial.
+- [x] La vista previa de Instagram y Reddit muestra miniatura y metadatos, y se mantiene la vista integrada de YouTube.
+
+**Resultado:** 90 pruebas Python, 13 subpruebas, build, lint y smoke T39 pasan. Se verificaron URLs y vistas con datos simulados. Queda pendiente la aceptación con publicaciones reales autorizadas.
+**Archivos:** motor, CLI, UI, documentación y pruebas.

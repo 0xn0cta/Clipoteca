@@ -45,7 +45,7 @@ The first release targets Windows. A user pastes a video or playlist URL, review
 - FFmpeg is planned to ship with the Windows installer; distribution licensing and notices must be checked before release.
 - Automatic retry policy is three retries for transient errors; continue the batch after an item fails and leave failed items available for manual retry. Validate partial-file resume behavior against real sites during Windows testing.
 - FFmpeg packaging, licensing, and final Windows installer details remain to be verified.
-- Scope is YouTube videos/playlists the user owns or is authorized to save. No other sites, DRM circumvention, authentication, or cookie import in the MVP.
+- Scope is publicly accessible YouTube videos/playlists, Instagram Reels and single-video posts, and Reddit video posts the user owns or is authorized to save. Authentication, cookie import, and DRM circumvention are out of scope.
 
 ## Brand Commitments
 

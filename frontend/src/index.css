@@ -27,6 +27,7 @@
   --accent-border: #74404A;
   --accent-wash: #32181F;
   --accent-wash-solid: #32181F;
+  --icon-accent: light-dark(#7B1E30, #E58A97);
   --success: #8FC5AD;
   --success-border: #3F5A50;
   --error: #F19AAA;
@@ -102,6 +103,7 @@
 }
 
 [data-accent="iris"] {
+  --palette-tint: #6855BE;
   --accent: light-dark(#5848AC, #6E5FD4);
   --accent-soft: light-dark(#4E3D96, #BFB5FF);
   --accent-border: light-dark(#7E6BB7, #7566AC);
@@ -110,6 +112,7 @@
 }
 
 [data-accent="blue"] {
+  --palette-tint: #3270BA;
   --accent: light-dark(#245997, #3E71BE);
   --accent-soft: light-dark(#274B7C, #9BC5FF);
   --accent-border: light-dark(#5779A7, #5475A0);
@@ -118,6 +121,7 @@
 }
 
 [data-accent="green"] {
+  --palette-tint: #2E8267;
   --accent: light-dark(#205F51, #257C64);
   --accent-soft: light-dark(#205C4B, #93DCBF);
   --accent-border: light-dark(#488270, #527C6D);
@@ -126,11 +130,45 @@
 }
 
 [data-accent="amber"] {
+  --palette-tint: #A87424;
   --accent: light-dark(#785014, #936115);
   --accent-soft: light-dark(#6F4A13, #F0C774);
   --accent-border: light-dark(#A3793F, #8D713F);
   --accent-wash: light-dark(#F7ECD5, #382A17);
   --accent-wash-solid: var(--accent-wash);
+}
+
+:root:is([data-accent="iris"], [data-accent="blue"], [data-accent="green"], [data-accent="amber"]) {
+  --ink: light-dark(
+    color-mix(in srgb, var(--palette-tint) 13%, #F8F8FB),
+    color-mix(in srgb, var(--palette-tint) 24%, #0D0C10)
+  );
+  --ink-raised: light-dark(
+    color-mix(in srgb, var(--palette-tint) 19%, #F3F3F8),
+    color-mix(in srgb, var(--palette-tint) 28%, #141219)
+  );
+  --surface: light-dark(
+    color-mix(in srgb, var(--palette-tint) 7%, #FFFFFF),
+    color-mix(in srgb, var(--palette-tint) 24%, #211E25)
+  );
+  --surface-raised: light-dark(
+    color-mix(in srgb, var(--palette-tint) 16%, #FBFBFF),
+    color-mix(in srgb, var(--palette-tint) 29%, #2A262E)
+  );
+  --line: light-dark(
+    color-mix(in srgb, var(--palette-tint) 23%, #E6E4EA),
+    color-mix(in srgb, var(--palette-tint) 34%, #39343E)
+  );
+  --line-strong: light-dark(
+    color-mix(in srgb, var(--palette-tint) 28%, #CDC8D1),
+    color-mix(in srgb, var(--palette-tint) 39%, #534C57)
+  );
+  --button-bg: color-mix(in srgb, var(--palette-tint) 16%, #E5E1E5);
+  --button-border: color-mix(in srgb, var(--palette-tint) 19%, #D9D3D9);
+  --button-hover: color-mix(in srgb, var(--palette-tint) 11%, #F1EEF1);
+  --button-disabled-bg: light-dark(var(--surface-raised), var(--line-strong));
+  --scrollbar-track: var(--ink-raised);
+  --scrollbar-thumb: var(--line-strong);
 }
 
 * {

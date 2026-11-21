@@ -32,7 +32,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react'
-import { SiYoutube } from 'react-icons/si'
+import { SiInstagram, SiReddit, SiYoutube } from 'react-icons/si'
 import logoMark from './assets/clipoteca-mark.svg'
 import './App.css'
 
@@ -84,7 +84,7 @@ type QueueItem = {
 }
 
 type DownloadStep = {
-  id: 'video' | 'audio' | 'merge' | 'file' | 'save' | 'mp3_audio' | 'convert'
+  id: 'video' | 'silent_video' | 'audio' | 'merge' | 'file' | 'save' | 'mp3_audio' | 'convert'
   status: 'pending' | 'active' | 'done'
 }
 
@@ -220,13 +220,15 @@ function elapsedForItem(item: QueueItem) {
     : accumulated
 }
 
-function sourceLabel(sourceUrl: string | null | undefined) {
+function sourceLabel(sourceUrl: string | null | undefined): 'YouTube' | 'Instagram' | 'Reddit' | 'Fuente desconocida' | 'Otra fuente' {
   if (!sourceUrl) return 'Fuente desconocida'
   try {
     const host = new URL(sourceUrl).hostname.toLowerCase()
-    if (host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com')) {
+    if (['youtu.be', 'youtube.com', 'youtube-nocookie.com'].includes(host) || host.endsWith('.youtube.com') || host.endsWith('.youtube-nocookie.com')) {
       return 'YouTube'
     }
+    if (host === 'instagram.com' || host.endsWith('.instagram.com')) return 'Instagram'
+    if (host === 'reddit.com' || host.endsWith('.reddit.com') || host === 'redd.it' || host === 'v.redd.it') return 'Reddit'
   } catch {
     // Bad or missing stored URLs stay a generic source rather than breaking the row.
   }
@@ -235,11 +237,10 @@ function sourceLabel(sourceUrl: string | null | undefined) {
 
 function SourceMark({ sourceUrl }: { sourceUrl: string | null | undefined }) {
   const label = sourceLabel(sourceUrl)
+  const Icon = { YouTube: SiYoutube, Instagram: SiInstagram, Reddit: SiReddit, 'Fuente desconocida': Globe, 'Otra fuente': Globe }[label]
   return (
-    <span className="source-mark" role="img" aria-label={`Fuente: ${label}`} title={label}>
-      {label === 'YouTube'
-        ? <SiYoutube size={15} aria-hidden="true" />
-        : <Globe size={15} strokeWidth={1.8} aria-hidden="true" />}
+    <span className="source-mark" data-platform={label.toLowerCase()} role="img" aria-label={`Fuente: ${label}`} title={label}>
+      <Icon size={15} aria-hidden="true" />
       <span aria-hidden="true">{label}</span>
     </span>
   )
@@ -291,6 +292,7 @@ function DownloadProgress({ item }: { item: QueueItem }) {
   }[phase]
   const stepLabels: Record<DownloadStep['id'], string> = {
     video: 'Vídeo',
+    silent_video: 'Vídeo',
     audio: 'Audio',
     merge: 'Unir',
     file: 'Vídeo y audio',
@@ -569,14 +571,15 @@ function App() {
   }
 
   function openPreview(item: MediaItem, trigger?: HTMLButtonElement) {
-    if (!youtubeVideoIdPattern.test(item.source_id)) {
+    const embedded = sourceLabel(item.source_url) === 'YouTube'
+    if (!item.source_url || (embedded && !youtubeVideoIdPattern.test(item.source_id))) {
       setNotice('No se pudo reconocer el identificador de este video para abrir la vista previa.')
       return
     }
     setNotice('')
     setPreviewItem(item)
-    if (previewItem?.source_id !== item.source_id || previewLoadState === 'error') {
-      setPreviewLoadState('loading')
+    if (previewItem?.id !== item.id || previewLoadState === 'error') {
+      setPreviewLoadState(embedded ? 'loading' : 'loaded')
     }
     if (trigger) {
       previewTrigger.current = trigger
@@ -714,6 +717,7 @@ function App() {
   }
 
   const destinationName = preferences.destination || 'Descargas\\Clipoteca'
+  const previewIsYoutube = sourceLabel(previewItem?.source_url) === 'YouTube'
 
   if (startupState === 'loading') {
     return (
@@ -846,7 +850,7 @@ function App() {
                   type="url"
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
-                  placeholder="Pega un enlace compatible con yt-dlp"
+                  placeholder="Pega un enlace de YouTube, Instagram o Reddit"
                   autoComplete="url"
                 />
                 <button className="analyze-button" type="submit" disabled={isAnalyzing}>
@@ -903,6 +907,7 @@ function App() {
                           {analysis.items.map((item) => {
                             const checked = selectedIds.includes(item.id)
                             const isPreviewOpen = previewItem?.id === item.id
+                            const platform = sourceLabel(item.source_url)
                             return (
                               <tr className={`${checked ? 'is-selected' : ''} ${!item.available ? 'is-unavailable' : ''}`} key={item.id}>
                                 <td className="check-cell"><label className="row-check">
@@ -913,10 +918,10 @@ function App() {
                                   <button
                                     className="thumbnail-preview"
                                     type="button"
-                                    aria-label={`Abrir vista previa de ${item.title} en YouTube`}
+                                    aria-label={`Abrir vista previa de ${item.title} en ${platform}`}
                                     aria-current={isPreviewOpen || undefined}
-                                    title={`Reproducir ${item.title}`}
-                                    disabled={!youtubeVideoIdPattern.test(item.source_id)}
+                                    title={`Vista previa de ${item.title}`}
+                                    disabled={!item.source_url || (platform === 'YouTube' && !youtubeVideoIdPattern.test(item.source_id))}
                                     onClick={(event) => openPreview(item, event.currentTarget)}
                                   >
                                     <span className="thumbnail-fallback" aria-hidden="true"><ListVideo size={16} /></span>
@@ -965,9 +970,13 @@ function App() {
                     ><X size={16} aria-hidden="true" /></button>}
                   </div>
                   <div className="preview-player">
-                    {previewItem && previewLoadState !== 'error' ? (
+                    {previewItem && !previewIsYoutube ? (
+                      previewItem.thumbnail
+                        ? <img className="preview-source-image" src={previewItem.thumbnail} alt="" />
+                        : <div className="preview-empty"><p>Este enlace no ofrece una miniatura.</p></div>
+                    ) : previewItem && previewLoadState !== 'error' ? (
                       <iframe
-                        key={previewItem.source_id}
+                        key={previewItem.id}
                         title={`Reproductor de YouTube: ${previewItem.title}`}
                         src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(previewItem.source_id)}?playsinline=1&rel=0`}
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
@@ -986,7 +995,7 @@ function App() {
                     ) : (
                       <div className="preview-empty">
                         <span><Play size={19} fill="currentColor" aria-hidden="true" /></span>
-                        <p>{analysis ? 'Pulsa la miniatura de un elemento para reproducirlo aquí.' : 'El reproductor aparecerá aquí al analizar un video o una playlist.'}</p>
+                        <p>{analysis ? 'Pulsa una miniatura para previsualizar el elemento.' : 'Analiza un enlace para ver su vista previa.'}</p>
                       </div>
                     )}
                   </div>
@@ -996,10 +1005,11 @@ function App() {
                       <>
                         <div className="preview-metadata">
                           <span>{formatDuration(previewItem.duration)}</span>
-                          <span>YouTube</span>
+                          <SourceMark sourceUrl={previewItem.source_url} />
                         </div>
                         {previewLoadState === 'loading' && <p className="preview-load-status" role="status">Conectando con YouTube…</p>}
-                        <p>{previewLoadState === 'error'
+                        <p>{!previewIsYoutube ? 'Miniatura de la publicación.'
+                          : previewLoadState === 'error'
                           ? 'Revisa la conexión y vuelve a intentarlo.'
                           : 'Vista previa en el reproductor oficial. No se guarda ningún archivo; algunos videos no permiten reproducción integrada.'}</p>
                       </>
@@ -1247,7 +1257,7 @@ function SettingsDialog({
         <ChevronDown size={15} aria-hidden="true" />
       </div>
       <fieldset className="accent-field">
-        <legend>Color de acento</legend>
+        <legend>Color de la interfaz</legend>
         <div className="accent-options">
           {accentOptions.map(([value, label]) => (
             <label key={value} className="accent-option">

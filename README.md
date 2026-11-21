@@ -71,7 +71,7 @@ La CLI comparte la cola y las preferencias locales con la aplicación. `download
 ## Funcionalidades implementadas en esta fase
 
 - Interfaz oscura en español con dirección de diseño **Archivo personal premium**.
-- Análisis de URLs de YouTube y selección de elementos antes de descargarlos.
+- Análisis de vídeos y playlists de YouTube, Reels y publicaciones con un solo vídeo de Instagram, y publicaciones de vídeo de Reddit.
 - Previsualización de la selección con miniatura y reproducción de audio/vídeo cuando la fuente lo permite; la reproducción no guarda un archivo.
 - Descarga de vídeo MP4, audio MP3 o ambos; FFmpeg es necesario para unir pistas y convertir audio.
 - Cola persistente con progreso por elemento, pausa, reanudación, cancelación y hasta tres reintentos automáticos ante errores temporales.
@@ -83,7 +83,7 @@ La CLI comparte la cola y las preferencias locales con la aplicación. `download
 - Mensajes de estado en la app y registro técnico local.
 - Logo vectorial C-marco con pestaña de índice; primera propuesta en revisión en `docs/brand/`.
 
-El análisis y la descarga no importan cookies o credenciales. El MVP acepta enlaces accesibles de YouTube sin iniciar sesión; no intenta sortear restricciones.
+El análisis y la descarga usan enlaces públicos que se pueden consultar sin iniciar sesión. Si un enlace compartido no se resuelve, pega el enlace directo de la publicación.
 
 ## Colaboración y tareas
 

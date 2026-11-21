@@ -40,7 +40,7 @@ class _CliArgumentParser(argparse.ArgumentParser):
         raise _CliUsageError(message)
 
 
-def _youtube_url(value: str) -> str:
+def _media_url(value: str) -> str:
     from .engine import UserFacingError, validate_source_url
 
     try:
@@ -96,16 +96,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     analyze = commands.add_parser("analyze", help="Analiza un enlace de YouTube sin descargar.")
     _add_json_option(analyze)
-    analyze.add_argument("url", type=_youtube_url, help="URL de un video o playlist de YouTube.")
+    analyze.add_argument("url", type=_media_url, help="URL de YouTube, Instagram o Reddit.")
 
     preview = commands.add_parser("preview", help="Obtiene una vista previa sin guardar un archivo.")
     _add_json_option(preview)
-    preview.add_argument("url", type=_youtube_url, help="URL de un video de YouTube.")
+    preview.add_argument("url", type=_media_url, help="URL de un video público.")
     _add_format_options(preview)
 
     download = commands.add_parser("download", help="Encola y ejecuta una descarga autorizada.")
     _add_json_option(download)
-    download.add_argument("url", type=_youtube_url, help="URL de un video o playlist de YouTube.")
+    download.add_argument("url", type=_media_url, help="URL de YouTube, Instagram o Reddit.")
     _add_format_options(download)
     selection = download.add_mutually_exclusive_group()
     selection.add_argument("--item", action="append", dest="item_ids", help="ID de elemento a incluir; se puede repetir.")

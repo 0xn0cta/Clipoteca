@@ -4,7 +4,7 @@
 
 Clipoteca es una aplicación de escritorio para Windows para preparar y gestionar descargas de videos individuales y playlists autorizadas. El repositorio contiene hoy un prototipo visual; `yt-dlp` y FFmpeg todavía no están conectados. La meta del MVP es convertir ese prototipo en un flujo real, verificable y recuperable, sin perder la dirección de diseño aprobada.
 
-**Éxito del MVP:** pegar un enlace de YouTube, inspeccionar el video o playlist sin descargarlo todavía, elegir elementos y formato, iniciar una cola, ver progreso por elemento y recuperar errores sin perder toda la playlist.
+**Éxito del MVP:** pegar un enlace de YouTube, Instagram o Reddit, inspeccionar el contenido sin descargarlo, elegir formato y destino y seguir el progreso y los errores desde la cola.
 
 ## 2. Decisiones confirmadas
 
@@ -28,7 +28,7 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 
 ### Incluye
 
-- Analizar una URL de video o playlist de YouTube sin iniciar una descarga.
+- Analizar vídeos y playlists de YouTube, Reels y publicaciones con un solo vídeo de Instagram, y publicaciones de vídeo de Reddit accesibles sin iniciar sesión.
 - Mostrar título, duración, orden y disponibilidad por elemento; no añadir miniaturas a las filas en este MVP.
 - Seleccionar/deseleccionar elementos; los no disponibles aparecen deshabilitados y con motivo cuando se conozca.
 - Elegir video MP4, audio MP3 o ambos.
@@ -48,7 +48,7 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 ### Fuera de alcance
 
 - Importar cookies, iniciar sesión, sortear desafíos, eludir DRM o acceder a contenido privado/restringido.
-- Descargar desde plataformas distintas de YouTube en el MVP.
+- Descargar desde plataformas distintas de YouTube, Instagram y Reddit, o desde perfiles, historias y carruseles de Instagram.
 - Subtítulos, transcripción, edición, conversión arbitraria de codecs o ajuste de bitrate MP3.
 - Sincronización en la nube, telemetría o envío remoto del historial.
 - Reescribir el diseño aprobado o añadir un modo claro sin aprobación.
@@ -81,7 +81,7 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 3. Video/audio/ambos controla la salida; calidad se desactiva en audio-only.
 4. Las calidades se obtienen del análisis, no de una lista inventada. La opción automática prioriza la mejor calidad compatible con el formato elegido.
 5. Elegir carpeta mediante diálogo nativo de escritorio. Cancelar el diálogo conserva el destino anterior.
-6. La vista previa se abre por acción explícita en el reproductor oficial embebido de YouTube (`youtube-nocookie.com`); no inicia ni sustituye una descarga local.
+6. La vista previa se abre por acción explícita. YouTube usa su reproductor oficial embebido (`youtube-nocookie.com`). Instagram y Reddit muestran la miniatura y los metadatos de la publicación.
 7. La validación muestra qué se guardará, el destino y los elementos omitidos antes de iniciar.
 
 ### W4 — Descargar video, audio o playlist
@@ -95,7 +95,7 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 
 ### W5 — Previsualizar y revisar historial
 
-- Cada entrada conserva su miniatura junto a la selección; pulsarla abre el reproductor oficial de YouTube dentro de Clipoteca.
+- Cada entrada conserva su miniatura junto a la selección. Al pulsarla, Clipoteca muestra la vista previa disponible para ese origen.
 - La vista previa solo se carga tras una acción explícita del usuario, no guarda archivos y no sustituye la descarga.
 - Si YouTube no permite insertar el video, el reproductor muestra su aviso; Clipoteca conserva título/duración. Cuando el WebView informa un fallo de carga, la UI permite reintentar.
 - No se importan cookies ni credenciales para la vista previa.
@@ -178,7 +178,7 @@ La UI actual consulta `get_queue_state()` de forma periódica. El MVP debe mante
 - Preferencias: `%LOCALAPPDATA%/Clipoteca/settings.json`, escritura atómica y validación de esquema.
 - Destino inicial: `%USERPROFILE%/Downloads/Clipoteca`.
 - Playlist: subcarpeta creada desde título saneado.
-- Filename recomendado: título saneado + ID de YouTube para evitar colisiones.
+- Nombre de archivo recomendado: título saneado e ID del medio para evitar colisiones.
 - Resolver caracteres reservados, nombres Windows reservados, separadores, longitud y colisiones.
 - No formar rutas con `../`, no aceptar rutas arbitrarias del renderer y no ejecutar strings como shell.
 - Persistir tareas pendientes/interrumpidas para recuperación. No subir historial ni URLs a ningún servicio.
@@ -222,4 +222,4 @@ Errores que requieren tratamiento: URL inválida, dominio no soportado, red/rate
 - Proveedor y paquete FFmpeg definitivos, tras la revisión legal/licencias.
 - Umbral de advertencia de concurrencia (propuesta inicial: 5; no es un máximo).
 - Flujo de actualización de yt-dlp/app tras cambios del sitio.
-- Cualquier soporte de sitios ajenos a YouTube, subtítulos o historial permanente.
+- Cualquier soporte fuera de la lista de YouTube, Instagram y Reddit, subtítulos o historial permanente.

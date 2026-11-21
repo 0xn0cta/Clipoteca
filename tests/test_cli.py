@@ -52,7 +52,7 @@ class CliContractTests(unittest.TestCase):
         self.assertFalse(payload["ok"])
         self.assertEqual(payload["error"]["code"], "USAGE_ERROR")
 
-    def test_cli_rejects_non_youtube_hosts_before_dispatch(self) -> None:
+    def test_cli_rejects_unsupported_hosts_before_dispatch(self) -> None:
         stderr = io.StringIO()
         with contextlib.redirect_stderr(stderr):
             result = main(["--json", "analyze", "https://example.com/video"])
@@ -60,7 +60,7 @@ class CliContractTests(unittest.TestCase):
         self.assertEqual(result, EXIT_USAGE)
         payload = json.loads(stderr.getvalue())
         self.assertEqual(payload["error"]["code"], "USAGE_ERROR")
-        self.assertIn("solo analiza enlaces de YouTube", payload["error"]["message"])
+        self.assertIn("YouTube, Instagram y Reddit", payload["error"]["message"])
 
     def test_json_option_is_accepted_after_a_nested_command(self) -> None:
         queue_state = {"queue": [], "history": [], "counts": {"active": 0, "completed": 0}}

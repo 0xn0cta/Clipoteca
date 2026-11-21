@@ -115,6 +115,38 @@ def assert_accent_swatch_contrast(page) -> None:
     assert len(ratios) == 5 and min(ratios) >= 4.5, ratios
 
 
+def palette_snapshot(page):
+    return page.evaluate("""() => {
+        const canvas = document.createElement('canvas').getContext('2d');
+        const luminance = (color) => {
+            canvas.clearRect(0, 0, 1, 1);
+            canvas.fillStyle = color;
+            canvas.fillRect(0, 0, 1, 1);
+            const [r, g, b] = [...canvas.getImageData(0, 0, 1, 1).data].map((value) => {
+                value /= 255;
+                return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+            });
+            return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        };
+        return {
+            surfaces: ['.app-shell', '.app-sidebar', '.settings-dialog', '#theme-mode'].map((selector) => {
+                const style = getComputedStyle(document.querySelector(selector));
+                const values = [luminance(style.backgroundColor), luminance(style.color)].sort((a, b) => b - a);
+                return { color: style.backgroundColor, contrast: (values[0] + 0.05) / (values[1] + 0.05) };
+            }),
+            icons: ['.sidebar-nav-item.is-active svg', '.engine-status-icon'].map((selector) =>
+                getComputedStyle(document.querySelector(selector)).color),
+        };
+    }""")
+
+
+def assert_palette_change(before, after):
+    assert before["icons"] == after["icons"]
+    for old, new in zip(before["surfaces"], after["surfaces"], strict=True):
+        assert old["color"] != new["color"]
+        assert new["contrast"] >= 4.5, new
+
+
 def main() -> None:
     CAPTURES.mkdir(parents=True, exist_ok=True)
     handler = partial(SimpleHTTPRequestHandler, directory=str(ROOT / "frontend" / "dist"))
@@ -245,10 +277,12 @@ def main() -> None:
                 "(el) => getComputedStyle(el).animationName"
             ) == "dialog-in"
             assert_accent_swatch_contrast(page)
+            dark_palette = palette_snapshot(page)
             expect(page.get_by_role("radio", name="Granate")).to_be_checked()
             page.get_by_role("radio", name="Granate").press("ArrowRight")
             expect(page.get_by_role("radio", name="Iris")).to_be_checked()
             expect(page.locator("html")).to_have_attribute("data-accent", "iris")
+            assert_palette_change(dark_palette, palette_snapshot(page))
             page.screenshot(path=str(CAPTURES / "t42-accents-dark.png"))
             settings_close = page.get_by_role("button", name="Cerrar ajustes")
             assert settings_close.evaluate("""(button) => {
@@ -304,8 +338,11 @@ def main() -> None:
             fast_page.screenshot(path=str(CAPTURES / "t40-options-light.png"), full_page=True)
             fast_page.get_by_role("button", name="Ajustes").click()
             assert_accent_swatch_contrast(fast_page)
+            light_palette = palette_snapshot(fast_page)
             fast_page.locator(".accent-option").get_by_text("Azul", exact=True).click()
             expect(fast_page.get_by_role("radio", name="Azul")).to_be_checked()
+            expect(fast_page.locator("html")).to_have_attribute("data-accent", "blue")
+            assert_palette_change(light_palette, palette_snapshot(fast_page))
             fast_page.screenshot(path=str(CAPTURES / "t42-accents-light.png"))
             fast_page.get_by_role("button", name="Guardar ajustes").click()
             expect(fast_page.locator(".modal-backdrop")).to_have_count(0)

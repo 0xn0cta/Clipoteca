@@ -162,6 +162,29 @@ def main() -> None:
             expect(first_checkbox).not_to_be_checked()
             page.screenshot(path=str(CAPTURES / "t39-preview-compact.png"), full_page=True)
 
+            page.evaluate("""() => {
+                const analyze = window.pywebview.api.analyze_url;
+                window.pywebview.api.analyze_url = async (source_url) => {
+                    const sample = await analyze();
+                    return {
+                        ...sample, source_url, is_playlist: false,
+                        items: [{ ...sample.items[0], source_url }],
+                    };
+                };
+            }""")
+            for platform, url in (
+                ("Instagram", "https://www.instagram.com/reel/mock/"),
+                ("Reddit", "https://www.reddit.com/r/demo/comments/mock/"),
+            ):
+                page.locator("#source-url").fill(url)
+                page.get_by_role("button", name="Analizar enlace").click()
+                expect(page.get_by_role("img", name=f"Fuente: {platform}")).to_be_visible()
+                page.get_by_role(
+                    "button", name=f"Abrir vista previa de Primer video de prueba en {platform}",
+                ).click()
+                expect(preview_panel.get_by_text("Miniatura de la publicación.")).to_be_visible()
+                expect(preview_panel.locator("iframe")).to_have_count(0)
+
             context.close()
             browser.close()
     finally:

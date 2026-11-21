@@ -2,7 +2,7 @@
 
 ## Objetivo
 
-Convertir el prototipo visual de Clipoteca en una app Windows funcional para analizar videos/playlists de YouTube, preparar formatos y destinos, descargar en una cola recuperable y empaquetar una build revisable.
+Convertir Clipoteca en una app Windows funcional para analizar vídeos y playlists de YouTube y publicaciones de vídeo de Instagram y Reddit, preparar la salida y descargar en una cola recuperable.
 
 ## Estado de partida: entrega del colaborador `b4cba94`
 
@@ -111,7 +111,7 @@ El propietario pidió poder ejecutar desde consola las capacidades funcionales e
 - Texto legible por defecto y salida JSON estable (`--json`) con códigos de salida documentados. El progreso no debe contaminar la salida JSON de resultados.
 - Modo headless: las descargas pueden completarse sin abrir la GUI; Ctrl+C debe detener/reanudar según el contrato, no dejar una tarea falsamente activa.
 - CLI y GUI comparten datos locales. Se requiere una única propiedad coordinada del worker; los controles enviados desde el otro proceso deben llegar al worker activo mediante señales SQLite locales o fallar claramente. La recuperación al arrancar solo la hace quien obtiene el lock.
-- Mantener YouTube-only, rutas validadas, uso autorizado y ausencia de cookies/credenciales. Acciones destructivas en automatización deben ser explícitas y comprobables.
+- Compartir la lista de fuentes permitidas con la GUI, validar rutas y mantener el uso autorizado sin cookies ni credenciales. Las acciones destructivas en automatización deben ser explícitas y comprobables.
 
 ### Orden y dependencias
 

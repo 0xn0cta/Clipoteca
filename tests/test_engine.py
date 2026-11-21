@@ -44,16 +44,20 @@ class FakeYoutubeDL:
 
 
 class EngineTests(unittest.TestCase):
-    def test_only_supported_youtube_hosts_are_accepted(self) -> None:
+    def test_only_supported_media_hosts_are_accepted(self) -> None:
         self.assertEqual(
             validate_source_url(" https://www.youtube.com/watch?v=video "),
             "https://www.youtube.com/watch?v=video",
         )
         self.assertEqual(validate_source_url("https://youtu.be/video"), "https://youtu.be/video")
+        self.assertEqual(validate_source_url("https://www.instagram.com/reel/demo/"), "https://www.instagram.com/reel/demo/")
+        self.assertEqual(validate_source_url("https://redd.it/demo"), "https://redd.it/demo")
         with self.assertRaises(UserFacingError):
             validate_source_url("https://example.org/video")
         with self.assertRaises(UserFacingError):
             validate_source_url("https://youtube.com.evil.example/video")
+        with self.assertRaises(UserFacingError):
+            validate_source_url("https://instagram.com.evil.example/reel/demo")
         with self.assertRaises(UserFacingError):
             validate_source_url("file:///C:/private/video.mp4")
         with self.assertRaises(UserFacingError):
@@ -66,6 +70,34 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(result["title"], "Sample playlist")
         self.assertEqual([item["title"] for item in result["items"]], ["First", "Second"])
         self.assertTrue(all(item["available"] for item in result["items"]))
+
+    def test_social_posts_use_canonical_downloadable_links(self) -> None:
+        class FakePost(FakeYoutubeDL):
+            def __init__(self, options):
+                self.options = options
+
+            def extract_info(self, url, *, download):
+                assert download is False
+                assert "generic" not in self.options["allowed_extractors"]
+                return {"id": "video", "title": "Public post", "url": "https://cdn.example.invalid/file.mp4"}
+
+        for supplied, canonical in (
+            ("https://m.instagram.com/reel/demo/?igsh=test", "https://www.instagram.com/reel/demo/"),
+            ("https://redd.it/demo", "https://www.reddit.com/comments/demo/"),
+            ("https://old.reddit.com/r/demo/comments/test/title/?share=1", "https://www.reddit.com/r/demo/comments/test/title/"),
+        ):
+            with self.subTest(source=supplied), patch("clipoteca.engine.YoutubeDL", FakePost):
+                result = analyze_url(supplied)
+                self.assertEqual(result["source_url"], canonical)
+                self.assertEqual(result["items"][0]["source_url"], canonical)
+                self.assertTrue(result["items"][0]["available"])
+
+    def test_shared_links_cannot_resolve_to_an_external_site(self) -> None:
+        with patch("clipoteca.engine.build_opener") as opener:
+            response = opener.return_value.open.return_value.__enter__.return_value
+            response.geturl.return_value = "https://www.reddit.com/r/demo/comments/test/"
+            with self.assertRaisesRegex(UserFacingError, "redirige fuera de su plataforma"):
+                analyze_url("https://www.instagram.com/share/reel/test")
 
     def test_audio_preview_resolves_a_stream_without_download(self) -> None:
         class FakePreviewYDL(FakeYoutubeDL):

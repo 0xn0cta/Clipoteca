@@ -7,6 +7,8 @@ import time
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlsplit, urlunsplit
+from urllib.error import URLError
+from urllib.request import HTTPRedirectHandler, build_opener
 
 from yt_dlp import YoutubeDL
 
@@ -14,6 +16,11 @@ from yt_dlp import YoutubeDL
 logger = logging.getLogger("clipoteca.engine")
 _URL_PATTERN = re.compile(r"https?://[^\s\"'<>]+", re.IGNORECASE)
 _YOUTUBE_HOSTS = {"youtube.com", "youtu.be", "youtube-nocookie.com"}
+_REDDIT_HOSTS = {"reddit.com", "www.reddit.com", "old.reddit.com", "m.reddit.com", "redd.it", "v.redd.it"}
+_INSTAGRAM_HOSTS = {"instagram.com", "www.instagram.com", "m.instagram.com"}
+_EXTRACTORS = ["youtube.*", "instagram", "reddit"]
+_INSTAGRAM_POST = re.compile(r"/(?:(?!share/)[\w.]+/)?(?:p|reels?|tv)/[\w-]+/?$")
+_REDDIT_POST = re.compile(r"/(?:(?:r|user)/[\w-]+/)?comments/[a-zA-Z0-9]+(?:/[^/]*)*/?$")
 _WINDOWS_RESERVED_NAMES = {
     "CON", "PRN", "AUX", "NUL",
     *(f"COM{number}" for number in range(1, 10)),
@@ -49,6 +56,16 @@ class _YtDlpLogCapture:
         self.errors.append(str(message))
 
 
+def _source_platform(host: str) -> str | None:
+    if host in _YOUTUBE_HOSTS or host.endswith((".youtube.com", ".youtube-nocookie.com")):
+        return "youtube"
+    if host in _INSTAGRAM_HOSTS:
+        return "instagram"
+    if host in _REDDIT_HOSTS:
+        return "reddit"
+    return None
+
+
 def validate_source_url(url: str) -> str:
     value = url.strip()
     try:
@@ -62,15 +79,50 @@ def validate_source_url(url: str) -> str:
     if parsed.username is not None or parsed.password is not None:
         raise UserFacingError("No incluyas credenciales en el enlace.")
     normalized_host = hostname.lower().rstrip(".")
-    is_youtube_host = normalized_host in _YOUTUBE_HOSTS or any(
-        normalized_host.endswith(f".{domain}")
-        for domain in ("youtube.com", "youtube-nocookie.com")
-    )
-    if not is_youtube_host:
-        raise UserFacingError("Clipoteca solo analiza enlaces de YouTube.")
+    if not _source_platform(normalized_host):
+        raise UserFacingError("Clipoteca admite enlaces de YouTube, Instagram y Reddit.")
     if port not in {None, 80, 443}:
-        raise UserFacingError("El enlace de YouTube usa un puerto no compatible.")
+        raise UserFacingError("El enlace usa un puerto no compatible.")
     return value
+
+
+class _PlatformRedirectHandler(HTTPRedirectHandler):
+    def __init__(self, platform: str) -> None:
+        self.platform = platform
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        target = validate_source_url(newurl)
+        if _source_platform((urlsplit(target).hostname or "").rstrip(".")) != self.platform:
+            raise UserFacingError("El enlace compartido redirige fuera de su plataforma.")
+        return super().redirect_request(req, fp, code, msg, headers, target)
+
+
+def _resolve_source_url(url: str) -> str:
+    source = validate_source_url(url)
+    parsed = urlsplit(source)
+    host = (parsed.hostname or "").rstrip(".")
+    platform = _source_platform(host)
+    if platform == "youtube":
+        return source
+    if host == "redd.it" and re.fullmatch(r"/[a-zA-Z0-9]+/?", parsed.path):
+        return f"https://www.reddit.com/comments/{parsed.path.strip('/')}/"
+    share_link = (
+        parsed.path.startswith("/share/") if platform == "instagram"
+        else host == "v.redd.it" or bool(re.fullmatch(r"/r/[\w-]+/s/[\w-]+/?", parsed.path))
+    )
+    if share_link:
+        try:
+            with build_opener(_PlatformRedirectHandler(platform)).open(source, timeout=8) as response:
+                parsed = urlsplit(validate_source_url(response.geturl()))
+        except (URLError, TimeoutError) as exc:
+            raise UserFacingError("No se pudo abrir el enlace compartido. Pega el enlace directo a la publicación.") from exc
+        if _source_platform((parsed.hostname or "").rstrip(".")) != platform:
+            raise UserFacingError("El enlace compartido redirige fuera de su plataforma.")
+    if platform == "instagram" and _INSTAGRAM_POST.fullmatch(parsed.path):
+        return urlunsplit(("https", "www.instagram.com", parsed.path, "", ""))
+    if platform == "reddit" and _REDDIT_POST.fullmatch(parsed.path):
+        return urlunsplit(("https", "www.reddit.com", parsed.path, "", ""))
+    raise UserFacingError("Pega un enlace directo a un Reel o a una publicación con vídeo.")
 
 
 def redact_url(url: str) -> str:
@@ -94,6 +146,7 @@ def _info_options() -> dict[str, Any]:
         "quiet": True,
         "no_warnings": True,
         "ignoreconfig": True,
+        "allowed_extractors": _EXTRACTORS,
         "logger": _YtDlpLogCapture(),
         "noplaylist": False,
         "extract_flat": "in_playlist",
@@ -103,7 +156,7 @@ def _info_options() -> dict[str, Any]:
 
 
 def analyze_url(url: str) -> dict[str, Any]:
-    source = validate_source_url(url)
+    source = _resolve_source_url(url)
     options = _info_options()
     ytdlp_log = options["logger"]
     try:
@@ -123,6 +176,8 @@ def analyze_url(url: str) -> dict[str, Any]:
         raise UserFacingError("El sitio no devolvió información reconocible para este enlace.")
 
     entries = info.get("entries")
+    if entries is not None and _source_platform(urlsplit(source).hostname or "") != "youtube":
+        raise UserFacingError("Esta publicación contiene varias piezas. Usa un enlace directo a un solo vídeo.")
     is_playlist = entries is not None
     source_entries = list(entries) if is_playlist else [info]
     items: list[dict[str, Any]] = []
@@ -149,6 +204,8 @@ def analyze_url(url: str) -> dict[str, Any]:
                 item_url = validate_source_url(str(item_url))
             except UserFacingError:
                 item_url = None
+        if not item_url and not is_playlist:
+            item_url = source
 
         source_id = str(entry.get("id") or index)
         stable_id = hashlib.sha256(f"{index}:{source_id}:{item_url or ''}".encode()).hexdigest()[:20]
@@ -183,7 +240,7 @@ def analyze_url(url: str) -> dict[str, Any]:
 
 def get_preview(url: str, output_format: str = "video", quality: str = "auto") -> dict[str, Any]:
     """Resolve a stream URL for an in-app preview without saving the media."""
-    source = validate_source_url(url)
+    source = _resolve_source_url(url)
     if output_format not in {"video", "audio", "both"}:
         raise UserFacingError("Formato de vista previa no válido.")
     options = _info_options()
@@ -275,7 +332,7 @@ def safe_filename(value: str, limit: int = 120) -> str:
     return cleaned.rstrip(" .") or "elemento"
 
 
-def _format_options(output_format: str, quality: str) -> list[tuple[str, str, dict[str, Any]]]:
+def _format_options(output_format: str, quality: str, *, allow_silent: bool = False) -> list[tuple[str, str, dict[str, Any]]]:
     if output_format not in {"video", "audio", "both"}:
         raise UserFacingError("Formato de salida no válido.")
     if quality not in {"auto", "1080", "720", "480"}:
@@ -288,15 +345,16 @@ def _format_options(output_format: str, quality: str) -> list[tuple[str, str, di
         })]
     # MP4 is a container. Prefer YouTube's H.264 streams for Windows playback.
     h264 = "[vcodec^=avc1]"
-    mp4_with_audio = f"best[ext=mp4][vcodec!=none][acodec!=none]{height}"
+    mp4_with_audio = f"best[ext=mp4][vcodec!=?none][acodec!=?none]{height}"
+    audio_track = "(bestaudio[ext=m4a]/bestaudio[ext=mp4])" if allow_silent else "bestaudio[ext=m4a]"
     video_selector = "/".join((
-        f"bestvideo[ext=mp4]{h264}{height}+bestaudio[ext=m4a]",
+        f"bestvideo[ext=mp4]{h264}{height}+{audio_track}",
         f"{mp4_with_audio}{h264}",
-        f"bestvideo[ext=mp4]{height}+bestaudio[ext=m4a]",
+        f"bestvideo[ext=mp4]{height}+{audio_track}",
         mp4_with_audio,
     ))
     video = ("video", "", {
-        "format": video_selector,
+        "format": f"{video_selector}/bestvideo[ext=mp4]{height}" if allow_silent else video_selector,
         "merge_output_format": "mp4",
     })
     if output_format == "both":
@@ -318,11 +376,11 @@ def download_item(
     progress: Callable[[dict[str, Any]], None],
     should_stop: Callable[[], str | None],
 ) -> dict[str, Any]:
-    source = validate_source_url(source_url)
+    source = _resolve_source_url(source_url)
     destination_path = Path(destination)
     destination_path.mkdir(parents=True, exist_ok=True)
     base_name = f"{safe_filename(title)} [{safe_filename(source_id, 48)}]"
-    stages = _format_options(output_format, str(quality))
+    stages = _format_options(output_format, str(quality), allow_silent=_source_platform(urlsplit(source).hostname or "") != "youtube")
     outputs: list[str] = []
     skipped: list[str] = []
     steps: list[str] = []
@@ -334,6 +392,8 @@ def download_item(
                 steps.extend(("video", "audio", "merge"))
             elif step in {"mp3_audio", "convert"}:
                 steps.extend(("mp3_audio", "convert"))
+            elif step == "silent_video":
+                steps.extend(("silent_video", "save"))
             else:
                 steps.extend(("file", "save"))
         if step and finished:
@@ -375,7 +435,7 @@ def download_item(
             elif stream.get("vcodec") == "none":
                 track = "audio"
             elif stream.get("acodec") == "none":
-                track = "video"
+                track = "silent_video" if status.get("filename") == str(expected) else "video"
             else:
                 track = (last_track or "file") if not stream else "file"
             if state == "finished":
@@ -390,7 +450,7 @@ def download_item(
             downloaded = int(status.get("downloaded_bytes") or 0)
             total = status.get("total_bytes") or status.get("total_bytes_estimate")
             fraction = (downloaded / total) if total else 0
-            phase = {"video": "video", "audio": "audio", "mp3_audio": "audio"}.get(track, "transfer")
+            phase = {"video": "video", "silent_video": "video", "audio": "audio", "mp3_audio": "audio"}.get(track, "transfer")
             now = time.monotonic()
             if phase == last_phase and now - last_progress_time < 0.4 and fraction < 1:
                 return
@@ -435,6 +495,7 @@ def download_item(
             "quiet": True,
             "no_warnings": True,
             "ignoreconfig": True,
+            "allowed_extractors": _EXTRACTORS,
             "noplaylist": True,
             "cachedir": False,
             "continuedl": True,
@@ -492,6 +553,8 @@ def _friendly_error(error: Exception, *, action: str) -> str:
         return "Falta FFmpeg para convertir o unir este formato. Instálalo y vuelve a intentarlo."
     if any(text in message for text in ("private video", "private", "login", "sign in", "authentication", "members-only")):
         return "Este contenido requiere iniciar sesión o no está disponible públicamente."
+    if any(text in message for text in ("no media found", "no video formats found", "requested format is not available")):
+        return "La publicación no ofrece vídeo o audio descargable en el formato elegido."
     if any(text in message for text in ("unsupported url", "no suitable extractor", "not a valid url")):
         return "Este sitio o enlace no es compatible con yt-dlp."
     if _is_transient_error(error) or any(text in message for text in ("connection", "network")):

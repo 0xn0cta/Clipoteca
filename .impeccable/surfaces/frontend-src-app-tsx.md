@@ -13,11 +13,11 @@ Redesign the existing Windows desktop application shell and its preparation, que
 
 ## Audience, job, action, and content
 
-An individual Windows user manages YouTube videos and playlists they own or are authorized to save. The user pastes a URL, reviews an ordered playlist, previews a selected item when the source permits it, chooses output options and destination, then follows the queue and history. The key information is item title, duration, availability, selection, preview and per-item outcome.
+An individual Windows user manages YouTube videos and playlists and video posts from Instagram and Reddit they own or are authorized to save. The user pastes a URL, reviews the available media, opens the preview, chooses output options and destination, then follows the queue and history.
 
 ## Constraints
 
-Spanish UI; Python + pywebview; React + TypeScript + Vite. Keep YouTube-only, no cookies/authentication/DRM bypass, no remote app services, and no invented playlist data. Preserve analysis, preview, format, quality, destination, queue, retry, history, tray and first-run concurrency functions. The interface should feel familiar to video viewers without using YouTube branding, logo, exact layout, copied labels or trade dress. Provide system theme detection plus a persistent manual Claro/Oscuro override. Keep the UI compact and responsive in small, maximized and fullscreen windows.
+Spanish UI; Python + pywebview; React + TypeScript + Vite. Limit extraction to public media from YouTube, Instagram and Reddit. Preserve analysis, preview, format, quality, destination, queue, retry, history, tray and first-run concurrency functions. Use platform marks only to identify the source. Provide system theme detection, persistent Claro/Oscuro overrides and surface palettes that preserve icon colors. Keep the UI compact and responsive in small, maximized and fullscreen windows.
 
 ## Chosen direction and memorable moment
 
