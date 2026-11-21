@@ -51,6 +51,21 @@ cd ..
 python main.py
 ```
 
+## Crear e instalar la aplicación de Windows
+
+Para compilar la app y la CLI portable en Windows, y crear accesos directos de la app en el Escritorio y el menú Inicio:
+
+```powershell
+python -m venv .venv-build
+.\.venv-build\Scripts\python.exe -m pip install -r packaging/requirements-build.txt
+.\packaging\build.ps1 -Python .\.venv-build\Scripts\python.exe
+.\packaging\install.ps1
+```
+
+La app compilada queda en `dist\windows\Clipoteca\Clipoteca.exe`; la CLI en `dist\windows\clipoteca-cli\clipoteca-cli.exe`. La instalación por usuario queda en `%LOCALAPPDATA%\Programs\Clipoteca\Clipoteca.exe`, con accesos directos en Inicio y el Escritorio. Para desinstalar solo los binarios y accesos, ejecuta `.\packaging\uninstall.ps1`; los datos de usuario se conservan.
+
+Este paquete local no incluye FFmpeg: requiere FFmpeg/FFprobe en `PATH` para MP3 y para unir o convertir algunas pistas. La redistribución de FFmpeg y un instalador firmado siguen pendientes de revisión de licencias.
+
 Para desarrollo con Vite Hot Module Replacement, ejecuta `npm run dev` dentro de `frontend` en una terminal y, desde otra terminal en la raíz:
 
 ```powershell
@@ -59,15 +74,7 @@ python main.py --dev
 
 ## Automatizar desde consola
 
-En Windows puedes compilar una distribución portátil con la app de escritorio y un ejecutable de consola independiente:
-
-```powershell
-python -m venv .venv-build
-.\.venv-build\Scripts\python.exe -m pip install -r packaging/requirements-build.txt
-.\packaging\build.ps1 -Python .\.venv-build\Scripts\python.exe
-```
-
-La build genera `dist/windows/Clipoteca/Clipoteca.exe` y `dist/windows/clipoteca-cli/clipoteca-cli.exe`. Conserva la carpeta completa de cada ejecutable, incluida `_internal`. La app gráfica requiere WebView2 y las operaciones de medios usan `ffmpeg` y `ffprobe` del `PATH` de Windows. La CLI funciona sin abrir la interfaz.
+La build conserva la carpeta completa de cada ejecutable, incluida `_internal`. La app gráfica requiere WebView2 y las operaciones de medios usan `ffmpeg` y `ffprobe` del `PATH` de Windows. La CLI funciona sin abrir la interfaz.
 
 El EXE y la ventana usan el icono ICO de Clipoteca. La ventana abre en 1280×720, se puede redimensionar y conserva los controles nativos de minimizar, maximizar y restaurar (mínimo 800×640). Para una compilación aislada sin reemplazar `dist/windows`, `packaging/build.ps1` acepta `-OutputPath` y `-WorkPath`.
 

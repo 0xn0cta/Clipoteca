@@ -374,6 +374,7 @@
 - [ ] Build falla con mensaje claro si assets/runtime requerido no están disponibles.
 
 **Verificación:** build en Windows limpio, smoke test open/close y API status.
+**Progreso local:** El build de `packaging/build.ps1` generó `dist\windows\Clipoteca\Clipoteca.exe` y `dist\windows\clipoteca-cli\clipoteca-cli.exe`. La CLI empaquetada pasó `tests/smoke_packaged_cli.py`; la app se abrió desde PyInstaller y respondió en este Windows. T24 sigue sin marcar: falta verificar el puente/API de la build en una instalación limpia.
 **Dependencias:** T04, T20, T23.
 **Archivos previstos:** `pyinstaller.spec`, `packaging/build.ps1`, `main.py`, `README.md`.
 **Alcance:** M.
@@ -388,6 +389,7 @@
 - [ ] Desinstalación no elimina archivos descargados del usuario por defecto.
 
 **Verificación:** instalar, abrir, hacer smoke, actualizar y desinstalar en Windows limpio/VM.
+**Progreso local:** `packaging/install.ps1` está adaptado a `dist\windows\Clipoteca` y crea accesos por usuario. No es todavía un instalador firmado ni incluye FFmpeg; una instalación limpia, WebView2/FFmpeg ausentes y actualización/desinstalación aún deben verificarse.
 **Dependencias:** T23, T24.
 **Archivos previstos:** `packaging/installer/`, `packaging/build.ps1`, `docs/INSTALL_WINDOWS.md`, `README.md`.
 **Alcance:** M.
