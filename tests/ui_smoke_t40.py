@@ -311,6 +311,31 @@ def main() -> None:
             expect(fast_page.locator(".modal-backdrop")).to_have_count(0)
             expect(fast_page.locator("html")).to_have_attribute("data-accent", "blue")
             assert fast_page.evaluate("window.mockQueueState.preferences.theme_accent") == "blue"
+            toast = fast_page.locator(".toast")
+            expect(toast).to_have_text("Ajustes guardados.")
+            expect(toast).to_have_css("top", "16px")
+            expect(toast).to_have_css("right", "16px")
+            toast.hover()
+            fast_page.clock.run_for(6100)
+            expect(toast).to_be_visible()
+            fast_page.mouse.move(400, 200)
+            fast_page.clock.run_for(6100)
+            expect(toast).to_have_count(0)
+
+            fast_page.get_by_role("button", name="Analizar enlace").click()
+            expect(toast).to_have_text("Pega un enlace para analizarlo.")
+            toast.get_by_role("button", name="Cerrar aviso").click()
+            expect(toast).to_have_count(0)
+
+            fast_page.evaluate("""() => {
+                window.pywebview.api.get_queue_state = async () => {
+                    throw new Error('Mock polling failure');
+                };
+            }""")
+            fast_page.clock.run_for(1400)
+            expect(toast).to_contain_text("No se pudo actualizar la cola")
+            fast_page.clock.run_for(7500)
+            expect(toast).to_have_count(0)
             fast_context.close()
 
             reduced_context = browser.new_context(

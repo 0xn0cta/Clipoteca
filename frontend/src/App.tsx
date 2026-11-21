@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
 import {
   Activity,
   ArrowDownToLine,
@@ -349,6 +349,26 @@ function dismissDialog(backdrop: HTMLDivElement | null, done: () => void) {
   void exit.finished.then(done, done)
 }
 
+function NoticeToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+  const [hovered, setHovered] = useState(false)
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (hovered || focused) return
+    const timer = window.setTimeout(onDismiss, 6000)
+    return () => window.clearTimeout(timer)
+  }, [hovered, focused, onDismiss])
+
+  return (
+    <div className="toast" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
+      <span role="status">{message}</span>
+      <button type="button" aria-label="Cerrar aviso" onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onClick={onDismiss}>
+        <X size={16} aria-hidden="true" />
+      </button>
+    </div>
+  )
+}
+
 function App() {
   const [api, setApi] = useState<DesktopApi | undefined>(() => window.pywebview?.api)
   const [view, setView] = useState<View>('prepare')
@@ -369,6 +389,7 @@ function App() {
   const [startupAttempt, setStartupAttempt] = useState(0)
   const [historyQuery, setHistoryQuery] = useState('')
   const [notice, setNotice] = useState('')
+  const clearNotice = useCallback(() => setNotice(''), [])
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [isEnqueueing, setIsEnqueueing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -448,15 +469,20 @@ function App() {
     let paintFrame: number | undefined
     let readyTimer: number | undefined
     let interval: number | undefined
+    let queueErrorReported = false
     const refresh = async () => {
       try {
         const state = await api.get_queue_state()
         if (!disposed) {
+          queueErrorReported = false
           setQueueState(state)
           setPreferences((current) => ({ ...current, ...state.preferences }))
         }
       } catch {
-        if (!disposed) setNotice('No se pudo actualizar la cola. Comprueba que Clipoteca siga abierta.')
+        if (!disposed && !queueErrorReported) {
+          queueErrorReported = true
+          setNotice('No se pudo actualizar la cola. Comprueba que Clipoteca siga abierta.')
+        }
       }
     }
     // Give the banner a painted frame before counting its visible time.
@@ -1142,7 +1168,7 @@ function App() {
         )}
       </main>
 
-      {notice && <div className="toast" role="status"><span>{notice}</span><button type="button" aria-label="Cerrar aviso" onClick={() => setNotice('')}><X size={16} aria-hidden="true" /></button></div>}
+      {notice && <NoticeToast key={notice} message={notice} onDismiss={clearNotice} />}
 
       {settingsOpen && <SettingsDialog backdropRef={settingsBackdrop} firstRun={!preferences.concurrency_mode} preferences={preferences} onClose={closeSettings} onAccentPreview={setPreviewAccent} onSave={(value) => void savePreferences(value)} />}
 
