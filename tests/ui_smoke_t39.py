@@ -203,6 +203,7 @@ def main() -> None:
                 expect(preview_panel.locator("iframe")).to_have_count(0)
 
             page.set_viewport_size({"width": 1440, "height": 920})
+            page.clock.install()
             page.evaluate("""(thumbnail) => {
                 const api = window.pywebview.api;
                 api.analyze_url = (source_url, requestId) => new Promise((resolve) => {
@@ -227,9 +228,18 @@ def main() -> None:
             progress = page.locator(".analysis-progress")
             expect(progress.locator('[aria-current="step"]')).to_have_text("Comprobar enlace")
             expect(progress.get_by_role("status")).to_contain_text("Esperando resultados…")
+            page.evaluate("window.analysisProgress = { phase: 'extracting', found: 0 }")
+            expect(progress.locator('[aria-current="step"]')).to_have_text("Encontrar vídeos")
+            page.clock.run_for(9500)
+            expect(progress.get_by_role("status")).to_contain_text("Esperando respuesta del sitio…")
+            assert int(progress.locator(".analysis-elapsed").inner_text().split()[0]) >= 8
+            expect(progress.locator(".analysis-track > span")).to_have_css("animation-iteration-count", "infinite")
             page.evaluate("window.analysisProgress = { phase: 'extracting', found: 48 }")
             expect(progress.locator('[aria-current="step"]')).to_have_text("Encontrar vídeos")
             expect(progress.get_by_role("status")).to_contain_text("48 vídeos encontrados")
+            expect(progress.get_by_role("status")).not_to_contain_text("Esperando respuesta del sitio…")
+            page.clock.run_for(9500)
+            expect(progress.get_by_role("status")).to_contain_text("48 vídeos encontrados · Esperando respuesta del sitio…")
             page.screenshot(path=str(CAPTURES / "t47-analysis-desktop.png"))
             page.evaluate("window.analysisProgress = { phase: 'preparing', found: 723 }")
             expect(progress.locator('[aria-current="step"]')).to_have_text("Preparar lista")
@@ -259,6 +269,12 @@ def main() -> None:
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             paging.scroll_into_view_if_needed()
             page.screenshot(path=str(CAPTURES / "t47-playlist-compact.png"))
+
+            page.evaluate("window.pywebview.api.analyze_url = async () => ({ ok: false, error: 'No se pudo conectar con el sitio.' })")
+            page.get_by_role("button", name="Analizar enlace").click()
+            expect(page.locator(".toast").get_by_role("alert")).to_contain_text("No se pudo conectar con el sitio.")
+            expect(progress).to_have_count(0)
+            expect(page.get_by_role("button", name="Analizar enlace")).to_be_enabled()
 
             context.close()
             browser.close()

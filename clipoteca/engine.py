@@ -180,6 +180,7 @@ class _AnalysisEntryCounter(PostProcessor):
 def analyze_url(url: str, *, on_progress: Callable[[str, int], None] | None = None) -> dict[str, Any]:
     source = _resolve_source_url(url)
     options = _info_options()
+    options["socket_timeout"] = 15
     ytdlp_log = options["logger"]
     counter = None
     if on_progress is not None:

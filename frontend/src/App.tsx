@@ -10,6 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleAlert,
+  CircleCheck,
+  CircleX,
   Clock3,
   ExternalLink,
   Film,
@@ -17,6 +19,7 @@ import {
   Globe,
   HardDrive,
   History,
+  Info,
   Link2,
   ListVideo,
   MonitorPlay,
@@ -68,6 +71,9 @@ const analysisSteps = {
 } as const
 
 type AnalysisProgress = { phase: keyof typeof analysisSteps; found: number }
+type AnalysisSnapshot = AnalysisProgress & { updatedAt: number }
+
+type Notice = { kind: 'info' | 'success' | 'warning' | 'error'; title: string; message: string }
 
 type QueueItem = {
   id: string
@@ -367,22 +373,62 @@ function dismissDialog(backdrop: HTMLDivElement | null, done: () => void) {
   void exit.finished.then(done, done)
 }
 
-function NoticeToast({ message, onDismiss }: { message: string; onDismiss: () => void }) {
+function NoticeToast({ notice, onDismiss }: { notice: Notice; onDismiss: () => void }) {
   const [hovered, setHovered] = useState(false)
   const [focused, setFocused] = useState(false)
+  const Icon = { info: Info, success: CircleCheck, warning: CircleAlert, error: CircleX }[notice.kind]
+  const timeout = { info: 6000, success: 6000, warning: 8000, error: 9000 }[notice.kind]
 
   useEffect(() => {
     if (hovered || focused) return
-    const timer = window.setTimeout(onDismiss, 6000)
+    const timer = window.setTimeout(onDismiss, timeout)
     return () => window.clearTimeout(timer)
-  }, [hovered, focused, onDismiss])
+  }, [hovered, focused, onDismiss, timeout])
 
   return (
-    <div className="toast" onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
-      <span role="status">{message}</span>
+    <div className="toast" data-kind={notice.kind} onPointerEnter={() => setHovered(true)} onPointerLeave={() => setHovered(false)}>
+      <span className="toast-icon" aria-hidden="true"><Icon size={18} /></span>
+      <div className="toast-copy" role={notice.kind === 'error' ? 'alert' : 'status'}>
+        <strong>{notice.title}</strong>
+        <p>{notice.message}</p>
+      </div>
       <button type="button" aria-label="Cerrar aviso" onFocus={() => setFocused(true)} onBlur={() => setFocused(false)} onClick={onDismiss}>
         <X size={16} aria-hidden="true" />
       </button>
+    </div>
+  )
+}
+
+function AnalysisIndicator({ progress, startedAt }: { progress: AnalysisSnapshot; startedAt: number }) {
+  const [now, setNow] = useState(() => performance.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(performance.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const currentIndex = Object.keys(analysisSteps).indexOf(progress.phase)
+  const elapsed = Math.floor((now - startedAt) / 1000)
+  const waiting = progress.phase !== 'preparing' && now - progress.updatedAt >= 8000
+  const found = progress.found > 0 ? `${progress.found} ${progress.found === 1 ? 'vídeo encontrado' : 'vídeos encontrados'}` : ''
+
+  return (
+    <div className="analysis-progress">
+      <ol className="analysis-progress-steps" aria-label="Fases del análisis">
+        {Object.entries(analysisSteps).map(([phase, label], index) => (
+          <li key={phase} aria-current={index === currentIndex ? 'step' : undefined}>
+            {index < currentIndex ? <Check size={14} aria-hidden="true" /> : <span aria-hidden="true" />}
+            {label}
+          </li>
+        ))}
+      </ol>
+      <div className="analysis-progress-summary">
+        <p role="status">
+          <span className="visually-hidden">{analysisSteps[progress.phase]}. </span>
+          {found && <span>{found}</span>}
+          {waiting ? <span>{found && ' · '}Esperando respuesta del sitio…</span> : !found && 'Esperando resultados…'}
+        </p>
+        <span className="analysis-elapsed"><Clock3 size={13} aria-hidden="true" />{formatElapsed(elapsed) || '0 s'}</span>
+      </div>
+      <div className="analysis-track" aria-hidden="true"><span /></div>
     </div>
   )
 }
@@ -407,12 +453,12 @@ function App() {
   const [startupState, setStartupState] = useState<'loading' | 'ready' | 'error'>('loading')
   const [startupAttempt, setStartupAttempt] = useState(0)
   const [historyQuery, setHistoryQuery] = useState('')
-  const [notice, setNotice] = useState('')
-  const clearNotice = useCallback(() => setNotice(''), [])
-  const [analysisRequest, setAnalysisRequest] = useState<string | null>(null)
-  const [analysisProgress, setAnalysisProgress] = useState<AnalysisProgress>({ phase: 'validating', found: 0 })
+  const [notice, setNotice] = useState<Notice | null>(null)
+  const clearNotice = useCallback(() => setNotice(null), [])
+  const showNotice = useCallback((kind: Notice['kind'], title: string, message: string) => setNotice({ kind, title, message }), [])
+  const [analysisRequest, setAnalysisRequest] = useState<{ id: string; startedAt: number } | null>(null)
+  const [analysisProgress, setAnalysisProgress] = useState<AnalysisSnapshot>({ phase: 'validating', found: 0, updatedAt: 0 })
   const isAnalyzing = analysisRequest !== null
-  const analysisStepIndex = Object.keys(analysisSteps).indexOf(analysisProgress.phase)
   const [isEnqueueing, setIsEnqueueing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [previewAccent, setPreviewAccent] = useState<ThemeAccent | null>(null)
@@ -437,6 +483,13 @@ function App() {
   const playlistPageStart = playlistPage * playlistPageSize
   const playlistPageCount = Math.ceil((analysis?.items.length ?? 0) / playlistPageSize)
   const activeCount = queueState?.counts.active ?? 0
+  const queueTotals = useMemo(() => {
+    const totals = { queued: 0, downloading: 0, paused: 0, failed: 0 }
+    for (const item of queueState?.queue ?? []) {
+      if (item.status !== 'completed' && item.status !== 'cancelled') totals[item.status] += 1
+    }
+    return totals
+  }, [queueState])
   const currentList = view === 'history' ? queueState?.history ?? [] : queueState?.queue ?? []
   const normalizedHistoryQuery = historyQuery.trim().toLocaleLowerCase('es')
   const visibleList = view === 'history' && normalizedHistoryQuery
@@ -506,7 +559,7 @@ function App() {
       } catch {
         if (!disposed && !queueErrorReported) {
           queueErrorReported = true
-          setNotice('No se pudo actualizar la cola. Comprueba que Clipoteca siga abierta.')
+          showNotice('error', 'Cola sin actualizar', 'No se pudo actualizar la cola. Comprueba que Clipoteca siga abierta.')
         }
       }
     }
@@ -548,7 +601,7 @@ function App() {
       window.clearInterval(interval)
       window.removeEventListener('clipoteca:close-request', onCloseRequest)
     }
-  }, [api, startupAttempt])
+  }, [api, startupAttempt, showNotice])
 
   useEffect(() => {
     const getProgress = api?.get_analysis_progress
@@ -558,9 +611,10 @@ function App() {
     let timer: number
     const refresh = async () => {
       try {
-        const snapshot = await getProgress(analysisRequest)
+        const snapshot = await getProgress(analysisRequest.id)
         if (!disposed && snapshot) {
-          setAnalysisProgress((current) => current.phase === snapshot.phase && current.found === snapshot.found ? current : snapshot)
+          const updatedAt = performance.now()
+          setAnalysisProgress((current) => current.phase === snapshot.phase && current.found === snapshot.found ? current : { ...snapshot, updatedAt })
         }
       } catch {
         // The analysis response itself reports any errors.
@@ -578,17 +632,18 @@ function App() {
   async function analyzeUrl() {
     if (isAnalyzing) return
     if (!api) {
-      setNotice('El análisis y las descargas están disponibles al abrir Clipoteca para escritorio.')
+      showNotice('info', 'Abre Clipoteca', 'El análisis y las descargas están disponibles en la app de escritorio.')
       return
     }
     if (!url.trim()) {
-      setNotice('Pega un enlace para analizarlo.')
+      showNotice('warning', 'Falta el enlace', 'Pega un enlace para analizarlo.')
       return
     }
     const requestId = crypto.randomUUID()
-    setAnalysisRequest(requestId)
-    setAnalysisProgress({ phase: 'validating', found: 0 })
-    setNotice('')
+    const startedAt = performance.now()
+    setAnalysisRequest({ id: requestId, startedAt })
+    setAnalysisProgress({ phase: 'validating', found: 0, updatedAt: startedAt })
+    clearNotice()
     setAnalysis(null)
     setPlaylistPage(0)
     setPreviewItem(null)
@@ -597,16 +652,16 @@ function App() {
     try {
       const result = await api.analyze_url(url, requestId)
       if (!result.ok) {
-        setNotice(result.error ?? 'No se pudo analizar el enlace.')
+        showNotice('error', 'Error de análisis', result.error ?? 'No se pudo analizar el enlace.')
         return
       }
       setAnalysis(result)
       setSelectedIds(result.items.filter((item) => item.available).map((item) => item.id))
       if (result.items.length === 1 && !result.is_playlist) {
-        setNotice('Enlace analizado. Revisa las opciones y prepara la descarga.')
+        showNotice('success', 'Enlace analizado', 'Revisa las opciones y prepara la descarga.')
       }
     } catch {
-      setNotice('No se pudo conectar con el motor de análisis.')
+      showNotice('error', 'Motor de análisis', 'No se pudo conectar con el motor de análisis.')
     } finally {
       setAnalysisRequest(null)
     }
@@ -625,10 +680,10 @@ function App() {
   function openPreview(item: MediaItem, trigger?: HTMLButtonElement) {
     const embedded = sourceLabel(item.source_url) === 'YouTube'
     if (!item.source_url || (embedded && !youtubeVideoIdPattern.test(item.source_id))) {
-      setNotice('No se pudo reconocer el identificador de este video para abrir la vista previa.')
+      showNotice('warning', 'Vista previa no disponible', 'No se pudo reconocer el identificador de este vídeo.')
       return
     }
-    setNotice('')
+    clearNotice()
     setPreviewItem(item)
     if (previewItem?.id !== item.id || previewLoadState === 'error') {
       setPreviewLoadState(embedded ? 'loading' : 'loaded')
@@ -651,11 +706,11 @@ function App() {
     if (!api || !analysis || selectedIds.length === 0) return
     if (!preferences.concurrency_mode) {
       setSettingsOpen(true)
-      setNotice('Antes de descargar, elige cómo ejecutar la cola.')
+      showNotice('warning', 'Configura la cola', 'Antes de descargar, elige cómo ejecutar la cola.')
       return
     }
     setIsEnqueueing(true)
-    setNotice('')
+    clearNotice()
     try {
       const result = await api.enqueue_batch(
         analysis.analysis_id,
@@ -664,10 +719,10 @@ function App() {
         quality,
       )
       if (!result.ok) {
-        setNotice(result.error ?? 'No se pudo añadir el lote a la cola.')
+        showNotice('error', 'Lote sin añadir', result.error ?? 'No se pudo añadir el lote a la cola.')
         return
       }
-      setNotice(`${result.queued} elementos añadidos a la cola.`)
+      showNotice('success', 'Lote en la cola', result.queued === 1 ? '1 elemento añadido.' : `${result.queued} elementos añadidos.`)
       setAnalysis(null)
       setPreviewItem(null)
       setPreviewLoadState('idle')
@@ -676,7 +731,7 @@ function App() {
       setView('queue')
       await refreshQueue()
     } catch {
-      setNotice('No se pudo iniciar el lote.')
+      showNotice('error', 'Error al iniciar el lote', 'Comprueba que Clipoteca siga abierta e inténtalo de nuevo.')
     } finally {
       setIsEnqueueing(false)
     }
@@ -689,7 +744,7 @@ function App() {
       setQueueState(state)
       setPreferences((current) => ({ ...current, ...state.preferences }))
     } catch {
-      setNotice('No se pudo actualizar la cola. Comprueba que Clipoteca siga abierta.')
+      showNotice('error', 'Cola sin actualizar', 'No se pudo actualizar la cola. Comprueba que Clipoteca siga abierta.')
     }
   }
 
@@ -700,7 +755,7 @@ function App() {
       setPreferences((current) => ({ ...current, destination: result.destination! }))
       await refreshQueue()
     } else if (result.error) {
-      setNotice(result.error)
+      showNotice('error', 'Carpeta no disponible', result.error)
     }
   }
 
@@ -708,12 +763,12 @@ function App() {
     if (!api) return
     const result = await api.set_preferences(next)
     if (!result.ok) {
-      setNotice(result.error ?? 'No se pudieron guardar los ajustes.')
+      showNotice('error', 'Ajustes sin guardar', result.error ?? 'No se pudieron guardar los ajustes.')
       return
     }
     setPreferences({ ...defaultPreferences, ...result.preferences })
     closeSettings()
-    setNotice('Ajustes guardados.')
+    showNotice('success', 'Ajustes guardados', 'Tus preferencias ya están aplicadas.')
     await refreshQueue()
   }
 
@@ -737,14 +792,18 @@ function App() {
       return
     }
     const result = await api.clear_history()
-    setNotice(`${result.removed} registros eliminados. Los archivos descargados no se han tocado.`)
+    if (!result.ok) {
+      showNotice('error', 'Historial sin limpiar', 'Inténtalo de nuevo en unos segundos.')
+      return
+    }
+    showNotice('success', 'Historial limpio', `${result.removed} ${result.removed === 1 ? 'registro eliminado' : 'registros eliminados'}. Los archivos se conservan.`)
     await refreshQueue()
   }
 
   async function openHistoryFile(itemId: string, index: number) {
     if (!api) return
     const result = await api.open_history_file(itemId, index)
-    if (!result.ok) setNotice(result.error ?? 'No se pudo abrir el archivo.')
+    if (!result.ok) showNotice('error', 'Archivo no disponible', result.error ?? 'No se pudo abrir el archivo.')
   }
 
   async function cancelAll() {
@@ -752,7 +811,7 @@ function App() {
       return
     }
     await api.cancel_all()
-    setNotice('Se han enviado las cancelaciones.')
+    showNotice('info', 'Cancelación solicitada', 'La cola se actualizará cuando se detengan las descargas.')
     await refreshQueue()
   }
 
@@ -919,24 +978,7 @@ function App() {
                   <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               </form>
-              {isAnalyzing && (
-                <div className="analysis-progress">
-                  <ol className="analysis-progress-steps" aria-label="Fases del análisis">
-                    {Object.entries(analysisSteps).map(([phase, label], index) => (
-                      <li key={phase} aria-current={index === analysisStepIndex ? 'step' : undefined}>
-                        {index < analysisStepIndex ? <Check size={14} aria-hidden="true" /> : <span aria-hidden="true" />}
-                        {label}
-                      </li>
-                    ))}
-                  </ol>
-                  <p role="status">
-                    <span className="visually-hidden">{analysisSteps[analysisProgress.phase]}. </span>
-                    {analysisProgress.found > 0
-                      ? `${analysisProgress.found} ${analysisProgress.found === 1 ? 'vídeo encontrado' : 'vídeos encontrados'}`
-                      : 'Esperando resultados…'}
-                  </p>
-                </div>
-              )}
+              {analysisRequest && <AnalysisIndicator progress={analysisProgress} startedAt={analysisRequest.startedAt} />}
             </section>
 
             <div className="demo-disclosure" role="note">
@@ -1178,17 +1220,38 @@ function App() {
             </footer>
           </div>
         ) : (
-          <section className="queue-view">
-            <div className="queue-heading queue-heading-row">
-              <div>
-                <h1>{view === 'history' ? 'Historial' : 'Cola de descargas'}</h1>
-                <p>{view === 'history' ? 'Resultados de lotes finalizados. Limpiar el historial no borra los archivos.' : 'Estado y recuperación por elemento.'}</p>
+          <section className="queue-view" aria-labelledby="activity-title">
+            <header className="queue-heading">
+              <div className="activity-overview">
+                <div className="activity-heading">
+                  <span className="activity-icon" aria-hidden="true">
+                    {view === 'history' ? <History size={23} /> : <ListVideo size={23} />}
+                  </span>
+                  <div>
+                    <h1 id="activity-title">{view === 'history' ? 'Historial' : 'Cola de descargas'}</h1>
+                    <p>{view === 'history' ? 'Consulta y abre tus descargas finalizadas.' : 'Sigue las descargas y recupera las que hayan fallado.'}</p>
+                  </div>
+                </div>
+                <dl className="activity-summary" aria-label={view === 'history' ? 'Resumen del historial' : 'Resumen de la cola'}>
+                  {view === 'history' ? (
+                    <>
+                      <div><dt>Finalizadas</dt><dd>{currentList.length}</dd></div>
+                      {normalizedHistoryQuery && <div><dt>Coincidencias</dt><dd>{visibleList.length}</dd></div>}
+                    </>
+                  ) : (
+                    <>
+                      <div><dt>En curso</dt><dd>{queueTotals.downloading}</dd></div>
+                      <div><dt>Pendientes</dt><dd>{queueTotals.queued}</dd></div>
+                      <div><dt>Pausadas</dt><dd>{queueTotals.paused}</dd></div>
+                      <div data-failed={queueTotals.failed > 0}><dt>Fallidas</dt><dd>{queueTotals.failed}</dd></div>
+                    </>
+                  )}
+                </dl>
               </div>
-            {view === 'history' ? (
+              {view === 'history' ? (
                 <div className="history-tools">
-                  <label className="history-search">
+                  <div className="history-search">
                     <Search size={15} aria-hidden="true" />
-                    <span className="visually-hidden">Buscar por título o playlist</span>
                     <input
                       type="search"
                       aria-label="Buscar en el historial"
@@ -1197,17 +1260,17 @@ function App() {
                       onChange={(event) => setHistoryQuery(event.target.value)}
                     />
                     {historyQuery && <button type="button" aria-label="Borrar búsqueda" onClick={() => setHistoryQuery('')}><X size={14} aria-hidden="true" /></button>}
-                  </label>
+                  </div>
                   <button className="secondary-action" type="button" disabled={!currentList.length} onClick={() => void clearHistory()}><Trash2 size={15} aria-hidden="true" />Limpiar historial</button>
                 </div>
               ) : (
                 <div className="queue-actions">
-                  <button className="secondary-action" type="button" disabled={!queueState?.queue.some((item) => item.status === 'queued' || item.status === 'downloading')} onClick={() => void api?.pause_all()}><Pause size={15} aria-hidden="true" />Pausar todo</button>
-                  <button className="secondary-action" type="button" disabled={!queueState?.queue.some((item) => item.status === 'paused')} onClick={() => void api?.resume_all()}><Play size={15} aria-hidden="true" />Reanudar</button>
-                  <button className="secondary-action danger-action" type="button" disabled={!queueState?.queue.some((item) => ['queued', 'downloading', 'paused'].includes(item.status))} onClick={() => void cancelAll()}><X size={15} aria-hidden="true" />Cancelar todo</button>
+                  <button className="secondary-action" type="button" disabled={queueTotals.queued + queueTotals.downloading === 0} onClick={() => void api?.pause_all()}><Pause size={15} aria-hidden="true" />Pausar todo</button>
+                  <button className="secondary-action" type="button" disabled={queueTotals.paused === 0} onClick={() => void api?.resume_all()}><Play size={15} aria-hidden="true" />Reanudar</button>
+                  <button className="secondary-action danger-action" type="button" disabled={queueTotals.queued + queueTotals.downloading + queueTotals.paused === 0} onClick={() => void cancelAll()}><X size={15} aria-hidden="true" />Cancelar todo</button>
                 </div>
               )}
-            </div>
+            </header>
 
             {visibleList.length ? (
               <div className="download-list">
@@ -1274,7 +1337,7 @@ function App() {
         )}
       </main>
 
-      {notice && <NoticeToast key={notice} message={notice} onDismiss={clearNotice} />}
+      {notice && <NoticeToast key={`${notice.kind}:${notice.title}:${notice.message}`} notice={notice} onDismiss={clearNotice} />}
 
       {settingsOpen && <SettingsDialog backdropRef={settingsBackdrop} firstRun={!preferences.concurrency_mode} preferences={preferences} onClose={closeSettings} onAccentPreview={setPreviewAccent} onSave={(value) => void savePreferences(value)} />}
 

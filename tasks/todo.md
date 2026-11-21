@@ -752,3 +752,14 @@
 
 **Resultado:** build, lint, smokes T39/T40 y 96 pruebas Python con 14 subpruebas en el árbol compartido. Capturas del tema dorado revisadas a 1440 y 390 px. El puente de las pruebas de interfaz usa datos simulados.
 **Archivos:** `frontend/src/App.tsx`, `frontend/src/App.css`, `tests/ui_smoke_t39.py` y `DESIGN.md`.
+
+### T49 — Mejorar avisos, cabeceras de actividad y espera del análisis
+
+**Dependencias:** T39, T40, T47 y T48.
+**Criterios de aceptación:**
+- [x] Los avisos internos distinguen información, éxito, advertencia y error con un icono y un título. Conservan el cierre manual, el cierre automático y la pausa al interactuar.
+- [x] Cola e Historial muestran recuentos reales y controles agrupados, sin desbordamiento a 390 px.
+- [x] El análisis conserva la fase y el contador durante esperas, muestra el tiempo transcurrido y distingue una pausa de resultados. Un error devuelve el control al formulario.
+
+**Resultado:** build, lint, smokes T39/T40 y 96 pruebas Python con 14 subpruebas. Se simularon pausas antes y después de recibir entradas, fallo de red, avisos y cambio de tamaño. Las peticiones de red de yt-dlp durante el análisis usan un timeout de 15 segundos por petición. Queda por reproducir el caso original con su enlace real.
+**Archivos:** `frontend/src/App.tsx`, `frontend/src/App.css`, `clipoteca/engine.py`, `DESIGN.md` y pruebas.

@@ -84,6 +84,7 @@ class EngineTests(unittest.TestCase):
 
         def extract_info(ydl, url, *, download):
             self.assertFalse(download)
+            self.assertEqual(ydl.params["socket_timeout"], 15)
             return ydl.process_ie_result({
                 "_type": "playlist", "id": "sample", "title": "Example", "entries": entries(),
                 "extractor": "youtube:tab", "extractor_key": "YoutubeTab", "webpage_url": url,

@@ -202,6 +202,9 @@ def main() -> None:
 
             page.get_by_role("button", name="Cola, 2 descargas activas").click()
             expect(page.locator(".queue-view")).to_have_count(1)
+            queue_summary = page.locator('.activity-summary[aria-label="Resumen de la cola"]')
+            expect(queue_summary.locator("dd")).to_have_text(["1", "0", "0", "1"])
+            page.locator(".queue-heading").screenshot(path=str(CAPTURES / "t49-queue-desktop.png"))
             assert page.locator(".queue-view").evaluate(
                 "(el) => getComputedStyle(el).animationName"
             ) == "view-enter"
@@ -262,6 +265,7 @@ def main() -> None:
 
             page.get_by_role("button", name="Historial, 2 resultados").click()
             expect(page.get_by_role("searchbox", name="Buscar en el historial")).to_be_visible()
+            expect(page.locator('.activity-summary[aria-label="Resumen del historial"] dd')).to_have_text("2")
             expect(page.get_by_role("img", name="Fuente: YouTube")).to_have_count(2)
             expect(page.get_by_text("1:42 de video")).to_be_visible()
             expect(page.get_by_text("1 min 5 s")).to_be_visible()
@@ -273,6 +277,7 @@ def main() -> None:
             search = page.get_by_role("searchbox", name="Buscar en el historial")
             search.fill("girasoles")
             expect(page.locator(".download-row.is-history")).to_have_count(1)
+            expect(page.locator('.activity-summary[aria-label="Resumen del historial"] dd')).to_have_text(["2", "1"])
             expect(page.get_by_role("heading", name="Girasoles al atardecer")).to_be_visible()
             search.fill("sin resultados")
             expect(page.get_by_role("heading", name="No hay coincidencias")).to_be_visible()
@@ -309,6 +314,12 @@ def main() -> None:
             expect(collapse).to_have_count(0)
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
             page.screenshot(path=str(CAPTURES / "t40-history-compact.png"), full_page=True)
+            page.get_by_role("button", name="Cola, 2 descargas activas").click()
+            expect(page.locator('.activity-summary[aria-label="Resumen de la cola"] dd')).to_have_count(4)
+            overflow = page.evaluate("""() => Array.from(document.querySelectorAll('main *'))
+                .filter((element) => element.getBoundingClientRect().right > window.innerWidth && getComputedStyle(element).position !== 'absolute')
+                .map((element) => [element.tagName, element.className, element.getBoundingClientRect().right])""")
+            assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth"), overflow
             context.close()
 
             fast_context = browser.new_context(
@@ -357,9 +368,11 @@ def main() -> None:
             expect(fast_page.locator("html")).to_have_attribute("data-accent", "blue")
             assert fast_page.evaluate("window.mockQueueState.preferences.theme_accent") == "blue"
             toast = fast_page.locator(".toast")
-            expect(toast).to_have_text("Ajustes guardados.")
+            expect(toast.get_by_role("status")).to_contain_text("Ajustes guardados")
+            expect(toast).to_have_attribute("data-kind", "success")
             expect(toast).to_have_css("top", "16px")
             expect(toast).to_have_css("right", "16px")
+            toast.screenshot(path=str(CAPTURES / "t49-toast-success-light.png"))
             toast.hover()
             fast_page.clock.run_for(6100)
             expect(toast).to_be_visible()
@@ -368,7 +381,8 @@ def main() -> None:
             expect(toast).to_have_count(0)
 
             fast_page.get_by_role("button", name="Analizar enlace").click()
-            expect(toast).to_have_text("Pega un enlace para analizarlo.")
+            expect(toast.get_by_role("status")).to_contain_text("Pega un enlace para analizarlo.")
+            expect(toast).to_have_attribute("data-kind", "warning")
             toast.get_by_role("button", name="Cerrar aviso").click()
             expect(toast).to_have_count(0)
             fast_page.mouse.move(400, 200)
@@ -379,8 +393,9 @@ def main() -> None:
                 };
             }""")
             fast_page.clock.run_for(1400)
-            expect(toast).to_contain_text("No se pudo actualizar la cola")
-            fast_page.clock.run_for(7500)
+            expect(toast.get_by_role("alert")).to_contain_text("No se pudo actualizar la cola")
+            expect(toast).to_have_attribute("data-kind", "error")
+            fast_page.clock.run_for(9700)
             expect(toast).to_have_count(0)
             fast_context.close()
 

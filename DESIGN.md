@@ -151,6 +151,8 @@ Playlist rows retain title, duration, selection, and status. On narrow windows, 
 
 The Prepare heading and source field share a surface. The last word of the heading uses the active accent, while supported platforms keep their own icon colors. Platform labels wrap on narrow windows, leaving the field and analysis action full width.
 
+Queue and History headings use the same surface with live counts and a separate row for actions. In-app notices use an icon, short title, and detail, with semantic color for success, warnings, and errors.
+
 Spacing is generous between the page title, source, playlist, and preference panel. Controls stay grouped; content lists use quiet row dividers rather than dense grids.
 
 ## Elevation & Depth
