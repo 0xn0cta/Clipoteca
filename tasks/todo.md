@@ -724,3 +724,14 @@
 
 **Resultado:** 96 pruebas Python y 14 subpruebas en el árbol compartido. Build, lint y smokes T39/T40 correctos. El smoke verificó tres fases y paginación con 723 entradas simuladas, selección entre páginas y layouts de 1440 y 390 px. La prueba Python verifica el recuento a medida que yt-dlp procesa un extractor simulado. Sin descarga externa ni prueba manual con la lista real.
 **Archivos:** `clipoteca/api.py`, `clipoteca/engine.py`, `frontend/src/App.tsx`, `frontend/src/App.css`, especificación y pruebas.
+
+### T48 — Pulir la cabecera de Preparar
+
+**Dependencias:** T39, T42 y T47.
+**Criterios de aceptación:**
+- [x] Título y formulario comparten panel. El título refleja el acento activo y los iconos conservan sus colores.
+- [x] Las fuentes compatibles quedan visibles antes de escribir, con disposición compacta sin desbordamiento.
+- [x] El formulario conserva el acceso por teclado y el progreso del análisis dentro del panel.
+
+**Resultado:** build, lint, smokes T39/T40 y 96 pruebas Python con 14 subpruebas en el árbol compartido. Capturas del tema dorado revisadas a 1440 y 390 px. El puente de las pruebas de interfaz usa datos simulados.
+**Archivos:** `frontend/src/App.tsx`, `frontend/src/App.css`, `tests/ui_smoke_t39.py` y `DESIGN.md`.

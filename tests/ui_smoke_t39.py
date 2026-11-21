@@ -82,7 +82,7 @@ def main() -> None:
                 color_scheme="dark",
                 device_scale_factor=1,
             )
-            context.add_init_script(MOCK_BRIDGE)
+            context.add_init_script(MOCK_BRIDGE.replace("theme_mode: 'dark'", "theme_mode: 'dark', theme_accent: 'amber'"))
             page = context.new_page()
             youtube_referers: list[str | None] = []
 
@@ -101,8 +101,18 @@ def main() -> None:
             page.route("https://www.youtube-nocookie.com/**", mock_youtube)
             page.goto(base_url, wait_until="networkidle")
 
-            page.locator("#source-url").fill("https://www.youtube.com/playlist?list=mock")
-            page.get_by_role("button", name="Analizar enlace").click()
+            introduction = page.get_by_role("region", name="Prepara tu descarga.")
+            expect(page.locator("html")).to_have_attribute("data-accent", "amber")
+            platforms = introduction.get_by_role("list", name="Fuentes compatibles")
+            expect(platforms.get_by_role("listitem")).to_have_text(["YouTube", "Instagram", "Reddit"])
+            expect(introduction.get_by_role("heading").locator("span")).to_have_css("color", "rgb(240, 199, 116)")
+            introduction.screenshot(path=str(CAPTURES / "t48-prepare-amber.png"))
+            source_field = introduction.get_by_label("Enlace de video o playlist")
+            source_field.fill("https://www.youtube.com/playlist?list=mock")
+            source_field.press("Tab")
+            submit = introduction.get_by_role("button", name="Analizar enlace")
+            expect(submit).to_be_focused()
+            submit.press("Enter")
             expect(page.get_by_role("heading", name="Lista de prueba autorizada")).to_be_visible()
             expect(page.get_by_role("button", name="Abrir vista previa de Primer video de prueba en YouTube")).to_be_visible()
             expect(page.get_by_role("button", name="Ver selección")).to_have_count(0)
@@ -162,6 +172,7 @@ def main() -> None:
 
             page.set_viewport_size({"width": 390, "height": 844})
             assert page.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+            introduction.screenshot(path=str(CAPTURES / "t48-prepare-compact.png"))
             first_thumbnail.click()
             expect(preview_panel).to_be_in_viewport(ratio=0.8)
             expect(page.frame_locator("iframe").get_by_text("Mock YouTube player")).to_be_visible()

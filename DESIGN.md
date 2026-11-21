@@ -149,6 +149,8 @@ The desktop surface has a quiet top navigation and a centered work area. The sou
 
 Playlist rows retain title, duration, selection, and status. On narrow windows, rows stack metadata beneath the title and preferences move below the list; the source and action remain easy to find. The main content uses a centered maximum width, with the desktop grid collapsing at `850px` and the compact navigation treatment at `620px`.
 
+The Prepare heading and source field share a surface. The last word of the heading uses the active accent, while supported platforms keep their own icon colors. Platform labels wrap on narrow windows, leaving the field and analysis action full width.
+
 Spacing is generous between the page title, source, playlist, and preference panel. Controls stay grouped; content lists use quiet row dividers rather than dense grids.
 
 ## Elevation & Depth

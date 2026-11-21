@@ -246,9 +246,12 @@ function sourceLabel(sourceUrl: string | null | undefined): 'YouTube' | 'Instagr
   return 'Otra fuente'
 }
 
+const sourceIcons = { YouTube: SiYoutube, Instagram: SiInstagram, Reddit: SiReddit, 'Fuente desconocida': Globe, 'Otra fuente': Globe }
+const supportedSources = ['YouTube', 'Instagram', 'Reddit'] as const
+
 function SourceMark({ sourceUrl }: { sourceUrl: string | null | undefined }) {
   const label = sourceLabel(sourceUrl)
-  const Icon = { YouTube: SiYoutube, Instagram: SiInstagram, Reddit: SiReddit, 'Fuente desconocida': Globe, 'Otra fuente': Globe }[label]
+  const Icon = sourceIcons[label]
   return (
     <span className="source-mark" data-platform={label.toLowerCase()} role="img" aria-label={`Fuente: ${label}`} title={label}>
       <Icon size={15} aria-hidden="true" />
@@ -883,14 +886,23 @@ function App() {
       <main className="main-content">
         {view === 'prepare' ? (
           <div className="preparation-view">
-            <section className="page-intro">
-              <div>
-                <h1>Prepara tu descarga.</h1>
-                <p>Pega un enlace. Revisa la lista. Guarda solo lo que quieras.</p>
-              </div>
-            </section>
-
-            <section className="source-panel" aria-labelledby="source-title">
+            <section className="source-panel" aria-labelledby="prepare-title">
+              <header className="source-heading">
+                <div>
+                  <h1 id="prepare-title">Prepara tu <span>descarga.</span></h1>
+                  <p>Revisa el contenido del enlace y elige qué quieres guardar.</p>
+                </div>
+                <ul className="supported-sources" aria-label="Fuentes compatibles">
+                  {supportedSources.map((platform) => {
+                    const Icon = sourceIcons[platform]
+                    return (
+                      <li className="source-mark" data-platform={platform.toLowerCase()} key={platform}>
+                        <Icon size={15} aria-hidden="true" />{platform}
+                      </li>
+                    )
+                  })}
+                </ul>
+              </header>
               <label className="source-label" id="source-title" htmlFor="source-url">Enlace de video o playlist</label>
               <form className="source-control" onSubmit={(event) => { event.preventDefault(); void analyzeUrl() }}>
                 <Link2 size={19} strokeWidth={1.7} aria-hidden="true" />
@@ -899,7 +911,7 @@ function App() {
                   type="url"
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
-                  placeholder="Pega un enlace de YouTube, Instagram o Reddit"
+                  placeholder="Pega aquí el enlace"
                   autoComplete="url"
                 />
                 <button className="analyze-button" type="submit" disabled={isAnalyzing}>
@@ -907,7 +919,7 @@ function App() {
                   <ArrowRight size={16} strokeWidth={1.8} aria-hidden="true" />
                 </button>
               </form>
-              {isAnalyzing ? (
+              {isAnalyzing && (
                 <div className="analysis-progress">
                   <ol className="analysis-progress-steps" aria-label="Fases del análisis">
                     {Object.entries(analysisSteps).map(([phase, label], index) => (
@@ -924,7 +936,7 @@ function App() {
                       : 'Esperando resultados…'}
                   </p>
                 </div>
-              ) : <p className="source-hint">Los elementos se revisan antes de iniciar la descarga.</p>}
+              )}
             </section>
 
             <div className="demo-disclosure" role="note">
