@@ -69,6 +69,8 @@ python -m venv .venv-build
 
 La build genera `dist/windows/Clipoteca/Clipoteca.exe` y `dist/windows/clipoteca-cli/clipoteca-cli.exe`. Conserva la carpeta completa de cada ejecutable, incluida `_internal`. La app gráfica requiere WebView2 y las operaciones de medios usan `ffmpeg` y `ffprobe` del `PATH` de Windows. La CLI funciona sin abrir la interfaz.
 
+El EXE y la ventana usan el icono ICO de Clipoteca. La ventana abre en 1280×720, se puede redimensionar y conserva los controles nativos de minimizar, maximizar y restaurar (mínimo 800×640). Para una compilación aislada sin reemplazar `dist/windows`, `packaging/build.ps1` acepta `-OutputPath` y `-WorkPath`.
+
 ```powershell
 .\dist\windows\clipoteca-cli\clipoteca-cli.exe --json status
 .\dist\windows\clipoteca-cli\clipoteca-cli.exe --json queue list

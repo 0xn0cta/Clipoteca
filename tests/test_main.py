@@ -67,5 +67,13 @@ def test_main_uses_pywebview_http_server_for_built_frontend() -> None:
     ):
         main.main()
 
-    assert webview.create_window.call_args.kwargs["url"] == str(frontend_path)
+    window_options = webview.create_window.call_args.kwargs
+    assert window_options["url"] == str(frontend_path)
+    assert window_options["width"] == 1280
+    assert window_options["height"] == 720
+    assert window_options["min_size"] == (800, 640)
+    assert window_options["resizable"] is True
+    assert window_options["frameless"] is False
+    assert window_options["maximized"] is False
+    assert window_options["icon"] == str(main.APP_ICON)
     webview.start.assert_called_once_with(debug=False, http_server=True)

@@ -1,5 +1,7 @@
 param(
-    [string]$Python = 'python'
+    [string]$Python = 'python',
+    [string]$OutputPath = '',
+    [string]$WorkPath = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -10,7 +12,16 @@ if ($env:OS -ne 'Windows_NT') {
 $project = Split-Path -Parent $PSScriptRoot
 $pythonCommand = (Get-Command $Python -ErrorAction Stop).Source
 $frontend = Join-Path $project 'frontend'
-$output = Join-Path $project 'dist/windows'
+$distPath = if ([string]::IsNullOrWhiteSpace($OutputPath)) {
+    Join-Path $project 'dist/windows'
+} else {
+    [System.IO.Path]::GetFullPath($OutputPath)
+}
+$pyinstallerWorkPath = if ([string]::IsNullOrWhiteSpace($WorkPath)) {
+    Join-Path $project 'build/pyinstaller'
+} else {
+    [System.IO.Path]::GetFullPath($WorkPath)
+}
 
 Push-Location $frontend
 try {
@@ -24,9 +35,13 @@ try {
     Pop-Location
 }
 
-& $pythonCommand -m PyInstaller --noconfirm --distpath $output `
-    --workpath (Join-Path $project 'build/pyinstaller') (Join-Path $PSScriptRoot 'clipoteca.spec')
+& $pythonCommand (Join-Path $PSScriptRoot 'generate_icon.py')
+if ($LASTEXITCODE -ne 0) { throw "No se pudo generar el icono de Windows. Comprueba Pillow en el entorno de compilación." }
+
+New-Item -ItemType Directory -Force -Path $distPath, $pyinstallerWorkPath | Out-Null
+& $pythonCommand -m PyInstaller --noconfirm --distpath $distPath `
+    --workpath $pyinstallerWorkPath (Join-Path $PSScriptRoot 'clipoteca.spec')
 if ($LASTEXITCODE -ne 0) { throw "PyInstaller terminó con código $LASTEXITCODE. Instala packaging/requirements-build.txt en el entorno de compilación." }
 
-Write-Output (Join-Path $output 'Clipoteca/Clipoteca.exe')
-Write-Output (Join-Path $output 'clipoteca-cli/clipoteca-cli.exe')
+Write-Output (Join-Path $distPath 'Clipoteca/Clipoteca.exe')
+Write-Output (Join-Path $distPath 'clipoteca-cli/clipoteca-cli.exe')
