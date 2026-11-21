@@ -115,6 +115,11 @@ def _resolve_source_url(url: str) -> str:
         parsed.path.startswith("/share/") if platform == "instagram"
         else host == "v.redd.it" or bool(re.fullmatch(r"/r/[\w-]+/s/[\w-]+/?", parsed.path))
     )
+    if platform == "instagram" and re.fullmatch(r"/[^/]+/reels/?", parsed.path, re.IGNORECASE):
+        raise UserFacingError(
+            "Clipoteca puede analizar Reels públicos individuales, pero no enumerar todos los Reels de un perfil todavía. "
+            "Pega el enlace directo de cada Reel."
+        )
     if share_link:
         try:
             with build_opener(_PlatformRedirectHandler(platform)).open(source, timeout=8) as response:

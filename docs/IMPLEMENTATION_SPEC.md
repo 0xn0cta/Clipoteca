@@ -48,7 +48,7 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 ### Fuera de alcance
 
 - Importar cookies, iniciar sesión, sortear desafíos, eludir DRM o acceder a contenido privado/restringido.
-- Descargar desde plataformas distintas de YouTube, Instagram y Reddit, o desde perfiles, historias y carruseles de Instagram.
+- Descargar desde plataformas distintas de YouTube, Instagram y Reddit. Las historias/carruseles de Instagram quedan fuera; los feeds de Reels de perfil están solicitados pero bloqueados hasta que yt-dlp los soporte sin autenticación.
 - Subtítulos, transcripción, edición, conversión arbitraria de codecs o ajuste de bitrate MP3.
 - Sincronización en la nube, telemetría o envío remoto del historial.
 - Reescribir el diseño aprobado o añadir un modo claro sin aprobación.

@@ -714,6 +714,23 @@
 **Resultado:** 92 pruebas Python y 13 subpruebas pasan. En Windows, la API WinRT aceptó un aviso silencioso de prueba desde el notifier real. Sin descargas externas.
 **Archivos:** `clipoteca/tray.py`, `clipoteca/manager.py`, pruebas y dependencias.
 
+### T46 — Analizar todos los Reels públicos de un perfil de Instagram
+
+**Descripción:** aceptar un enlace `/usuario/reels/` y presentar sus Reels de video públicos como una lista ordenada para selección y descarga por lote.
+
+**Criterios de aceptación:**
+- [ ] GUI y CLI analizan el perfil Reels sin iniciar sesión, importar cookies ni eludir restricciones.
+- [ ] Solo se ofrecen Reels de video públicos que yt-dlp puede enumerar; se preservan orden y estado por elemento.
+- [ ] `--all` puede encolar los elementos que el extractor devolvió; un fallo de acceso no crea un lote parcial silencioso.
+- [ ] Si el perfil requiere autenticación o el extractor no puede enumerarlo, Clipoteca explica el límite y no intenta una API privada ni scraping propio.
+- [x] El enlace `/usuario/reels/` muestra un mensaje específico: se admiten Reels individuales, pero no se pueden enumerar todos los Reels del perfil actualmente.
+
+**Bloqueo actual:** el `yt-dlp` instalado (2026.10.26) marca `InstagramUserIE._WORKING = False`; además, su patrón de usuario no acepta `/usuario/reels/`. Un análisis de metadatos del enlace público autorizado devolvió `Unable to extract data`. No se intentó descargar ningún medio.
+**Verificación:** `python -m pytest -q tests/test_engine.py` (17 pasadas, 12 subtests), incluidos Reels individuales y mensaje específico del perfil; prueba manual futura solo cuando la versión pública de yt-dlp pueda enumerar el perfil sin login.
+**Dependencias:** T44.
+**Archivos previstos:** `clipoteca/engine.py`, `tests/test_engine.py`, `docs/IMPLEMENTATION_SPEC.md`, `README.md`, `docs/CLI.md`.
+**Alcance:** M, bloqueado por extractor upstream.
+
 ### T47 — Mostrar el progreso del análisis y aligerar las listas largas
 
 **Dependencias:** T07–T10 y T39.

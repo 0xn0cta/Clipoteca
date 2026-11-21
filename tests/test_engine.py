@@ -126,6 +126,10 @@ class EngineTests(unittest.TestCase):
             with self.assertRaisesRegex(UserFacingError, "redirige fuera de su plataforma"):
                 analyze_url("https://www.instagram.com/share/reel/test")
 
+    def test_instagram_profile_reels_url_explains_profile_enumeration_is_unavailable(self) -> None:
+        with self.assertRaisesRegex(UserFacingError, "no enumerar todos los Reels de un perfil"):
+            analyze_url("https://www.instagram.com/paralisisaldormir/reels/")
+
     def test_audio_preview_resolves_a_stream_without_download(self) -> None:
         class FakePreviewYDL(FakeYoutubeDL):
             def extract_info(self, _url: str, *, download: bool) -> dict:
