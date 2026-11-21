@@ -286,9 +286,15 @@ def _format_options(output_format: str, quality: str) -> list[tuple[str, str, di
             "format": "bestaudio/best",
             "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
         })]
-    video_selector = (
-        f"bestvideo[ext=mp4]{height}+bestaudio[ext=m4a]/best[ext=mp4]{height}"
-    )
+    # MP4 is a container. Prefer YouTube's H.264 streams for Windows playback.
+    h264 = "[vcodec^=avc1]"
+    mp4_with_audio = f"best[ext=mp4][vcodec!=none][acodec!=none]{height}"
+    video_selector = "/".join((
+        f"bestvideo[ext=mp4]{h264}{height}+bestaudio[ext=m4a]",
+        f"{mp4_with_audio}{h264}",
+        f"bestvideo[ext=mp4]{height}+bestaudio[ext=m4a]",
+        mp4_with_audio,
+    ))
     video = ("video", "", {
         "format": video_selector,
         "merge_output_format": "mp4",
@@ -319,36 +325,79 @@ def download_item(
     stages = _format_options(output_format, str(quality))
     outputs: list[str] = []
     skipped: list[str] = []
+    steps: list[str] = []
+    completed_steps: set[str] = set()
+
+    def report_step(update: dict[str, Any], step: str | None, *, finished: bool = False) -> None:
+        if step and step not in steps:
+            if step in {"video", "audio", "merge"}:
+                steps.extend(("video", "audio", "merge"))
+            elif step in {"mp3_audio", "convert"}:
+                steps.extend(("mp3_audio", "convert"))
+            else:
+                steps.extend(("file", "save"))
+        if step and finished:
+            completed_steps.add(step)
+        progress({
+            **update,
+            "steps": [
+                {
+                    "id": entry,
+                    "status": "done" if entry in completed_steps else "active" if entry == step else "pending",
+                }
+                for entry in steps
+            ],
+        })
 
     for stage_index, (stage, suffix, stage_options) in enumerate(stages):
         expected_ext = "mp3" if stage == "audio" else "mp4"
         expected = destination_path / f"{base_name}{suffix}.{expected_ext}"
-        if expected.exists():
+        if expected.is_file():
             skipped.append(str(expected))
             continue
 
-        stage_paths: list[str] = []
         last_progress_time = 0.0
+        last_phase: str | None = None
+        last_track: str | None = None
 
         def on_progress(status: dict[str, Any], *, current_stage: int = stage_index) -> None:
-            nonlocal last_progress_time
+            nonlocal last_progress_time, last_phase, last_track
             action = should_stop()
             if action:
                 # yt-dlp leaves its .part file in place when a progress hook raises.
                 raise DownloadInterrupted(action)
-            if status.get("status") == "finished" and status.get("filename"):
-                stage_paths.append(str(status["filename"]))
+            state = status.get("status")
+            if state not in {"downloading", "finished"}:
                 return
-            if status.get("status") != "downloading":
+            stream = status.get("info_dict") or {}
+            if stage == "audio":
+                track = "mp3_audio"
+            elif stream.get("vcodec") == "none":
+                track = "audio"
+            elif stream.get("acodec") == "none":
+                track = "video"
+            else:
+                track = (last_track or "file") if not stream else "file"
+            if state == "finished":
+                last_phase = None
+                last_track = None
+                report_step(
+                    {"progress": current_stage / len(stages), "phase": "between_tracks"},
+                    track,
+                    finished=True,
+                )
                 return
             downloaded = int(status.get("downloaded_bytes") or 0)
             total = status.get("total_bytes") or status.get("total_bytes_estimate")
             fraction = (downloaded / total) if total else 0
+            phase = {"video": "video", "audio": "audio", "mp3_audio": "audio"}.get(track, "transfer")
             now = time.monotonic()
-            if now - last_progress_time < 0.4 and fraction < 1:
+            if phase == last_phase and now - last_progress_time < 0.4 and fraction < 1:
                 return
             last_progress_time = now
-            progress(
+            last_phase = phase
+            last_track = track
+            report_step(
                 {
                     "progress": (current_stage + fraction) / len(stages),
                     "downloaded_bytes": downloaded,
@@ -356,7 +405,29 @@ def download_item(
                     "speed": status.get("speed"),
                     "eta": status.get("eta"),
                     "stage": stage,
-                }
+                    "phase": phase,
+                },
+                track,
+            )
+
+        def on_postprocess(status: dict[str, Any], *, current_stage: int = stage_index) -> None:
+            state = status.get("status")
+            if state not in {"started", "finished"}:
+                return
+            action = should_stop()
+            if action:
+                raise DownloadInterrupted(action)
+            step, phase = {
+                "Merger": ("merge", "merging"),
+                "ExtractAudio": ("convert", "converting"),
+            }.get(
+                status.get("postprocessor"),
+                ("save" if "save" in steps and stage == "video" else None, "finalizing"),
+            )
+            report_step(
+                {"progress": (current_stage + 1) / len(stages), "phase": phase},
+                step,
+                finished=state == "finished",
             )
 
         ytdlp_log = _YtDlpLogCapture()
@@ -371,18 +442,19 @@ def download_item(
             "overwrites": False,
             "nooverwrites": True,
             "windowsfilenames": True,
-            "outtmpl": str(destination_path / f"{base_name}{suffix}.%(ext)s"),
+            "outtmpl": str(destination_path / f"{base_name}{suffix}").replace("%", "%%") + ".%(ext)s",
             "progress_hooks": [on_progress],
+            "postprocessor_hooks": [on_postprocess],
             "retries": 0,
             "fragment_retries": 0,
+            "skip_unavailable_fragments": False,
             "socket_timeout": 30,
             "logger": ytdlp_log,
             **stage_options,
         }
         try:
             with YoutubeDL(options) as ydl:
-                ydl.download([source])
-                if getattr(ydl, "_download_retcode", 0):
+                if ydl.download([source]):
                     detail = ytdlp_log.errors[-1] if ytdlp_log.errors else "yt-dlp devolvió un código de error"
                     raise RuntimeError(detail)
         except DownloadInterrupted:
@@ -398,7 +470,12 @@ def download_item(
                 _friendly_error(exc, action="descargar"),
                 retryable=_is_transient_error(exc),
             ) from exc
-        outputs.append(str(expected if expected.exists() else (stage_paths[-1] if stage_paths else expected)))
+        if not expected.is_file():
+            raise UserFacingError(
+                f"No se generó el archivo final {expected.suffix.upper().lstrip('.')}. "
+                "Comprueba FFmpeg y vuelve a intentarlo desde la cola."
+            )
+        outputs.append(str(expected))
 
     if not outputs and skipped:
         return {"paths": skipped, "duplicate": True}
@@ -409,13 +486,15 @@ def _friendly_error(error: Exception, *, action: str) -> str:
     message = str(error).lower()
     if "drm" in message or "protected by drm" in message:
         return "Este contenido está protegido con DRM. Clipoteca no puede previsualizarlo ni descargarlo; usa las opciones oficiales de la plataforma."
+    if any(text in message for text in ("no space left on device", "disk full", "errno 28", "not enough space")):
+        return "No hay espacio suficiente en el disco de destino. Libera espacio o cambia la carpeta y vuelve a intentarlo."
     if "ffmpeg" in message:
         return "Falta FFmpeg para convertir o unir este formato. Instálalo y vuelve a intentarlo."
     if any(text in message for text in ("private video", "private", "login", "sign in", "authentication", "members-only")):
         return "Este contenido requiere iniciar sesión o no está disponible públicamente."
     if any(text in message for text in ("unsupported url", "no suitable extractor", "not a valid url")):
         return "Este sitio o enlace no es compatible con yt-dlp."
-    if any(text in message for text in ("timed out", "timeout", "connection", "network", "temporary failure")):
+    if _is_transient_error(error) or any(text in message for text in ("connection", "network")):
         return "No se pudo conectar con el sitio. Comprueba tu conexión e inténtalo de nuevo."
     return f"No se pudo {action} el contenido. Revisa el enlace y vuelve a intentarlo."
 
@@ -426,7 +505,9 @@ def _is_transient_error(error: Exception) -> bool:
         marker in message
         for marker in (
             "timed out", "timeout", "connection reset", "connection refused",
-            "temporary failure", "temporarily unavailable", "http error 429",
+            "connection aborted", "broken pipe", "incompleteread", "incomplete read",
+            "did not get any data blocks", "winerror 10054", "winerror 10060",
+            "temporary failure", "temporarily unavailable", "http error 408", "http error 429",
             "http error 500", "http error 502", "http error 503", "http error 504",
             "remote end closed", "network is unreachable",
         )

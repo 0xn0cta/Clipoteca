@@ -66,6 +66,36 @@ class DesktopApiTests(unittest.TestCase):
             finally:
                 api.shutdown()
 
+    def test_theme_mode_is_an_allowed_preference_on_the_desktop_bridge(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            api = DesktopApi(database_path=Path(directory) / "db.sqlite3")
+            try:
+                result = api.set_preferences({"theme_mode": "dark"})
+                self.assertTrue(result["ok"])
+                self.assertEqual(api.get_preferences()["theme_mode"], "dark")
+                invalid = api.set_preferences({"theme_mode": "sepia"})
+                self.assertFalse(invalid["ok"])
+            finally:
+                api.shutdown()
+
+    def test_theme_accent_is_validated_and_persists_after_reopening(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "db.sqlite3"
+            api = DesktopApi(database_path=path)
+            try:
+                self.assertTrue(api.set_preferences({"theme_accent": "blue"})["ok"])
+                self.assertFalse(api.set_preferences({"theme_accent": "#00ff00"})["ok"])
+            finally:
+                api.shutdown()
+
+            reopened = DesktopApi(database_path=path)
+            try:
+                self.assertEqual(reopened.get_preferences()["theme_accent"], "blue")
+                self.assertTrue(reopened.set_preferences({"theme_accent": "clipoteca"})["ok"])
+                self.assertEqual(reopened.get_preferences()["theme_accent"], "clipoteca")
+            finally:
+                reopened.shutdown()
+
     def test_history_file_opens_with_the_windows_association(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             api = DesktopApi(database_path=Path(directory) / "db.sqlite3")

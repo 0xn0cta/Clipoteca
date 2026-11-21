@@ -81,7 +81,7 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 3. Video/audio/ambos controla la salida; calidad se desactiva en audio-only.
 4. Las calidades se obtienen del análisis, no de una lista inventada. La opción automática prioriza la mejor calidad compatible con el formato elegido.
 5. Elegir carpeta mediante diálogo nativo de escritorio. Cancelar el diálogo conserva el destino anterior.
-6. La vista previa resuelve el elemento seleccionado en modo de solo reproducción; no se guarda ni se usa como sustituto del archivo descargado.
+6. La vista previa se abre por acción explícita en el reproductor oficial embebido de YouTube (`youtube-nocookie.com`); no inicia ni sustituye una descarga local.
 7. La validación muestra qué se guardará, el destino y los elementos omitidos antes de iniciar.
 
 ### W4 — Descargar video, audio o playlist
@@ -95,9 +95,11 @@ El usuario pidió no fijar un máximo de concurrencia. Como medida informativa �
 
 ### W5 — Previsualizar y revisar historial
 
-- Previsualizar el elemento seleccionado solo cuando el origen entregue un flujo directamente reproducible.
-- La vista previa usa miniatura/controles nativos y no crea un archivo descargado.
-- Si el WebView no puede reproducir el flujo, conservar metadatos/miniatura y explicar que la fuente no permite preview embebido.
+- Cada entrada conserva su miniatura junto a la selección; pulsarla abre el reproductor oficial de YouTube dentro de Clipoteca.
+- La vista previa solo se carga tras una acción explícita del usuario, no guarda archivos y no sustituye la descarga.
+- Si YouTube no permite insertar el video, el reproductor muestra su aviso; Clipoteca conserva título/duración. Cuando el WebView informa un fallo de carga, la UI permite reintentar.
+- No se importan cookies ni credenciales para la vista previa.
+- El reproductor respeta la reproducción iniciada por el usuario y el tamaño mínimo del player/thumbnail. En escritorio, se pasa la ruta del bundle local (no una URL `file://`) a PyWebView y se activa su servidor HTTP para que el iframe reciba un `Referer`; no se falsifica un origen.
 - El historial separa resultados finalizados; abrir archivo usa la aplicación predeterminada de Windows.
 - Limpiar el historial elimina registros de Clipoteca, nunca archivos descargados.
 

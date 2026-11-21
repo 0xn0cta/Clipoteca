@@ -5,11 +5,14 @@ import tempfile
 from pathlib import Path
 from unittest.mock import patch
 
+from yt_dlp import YoutubeDL
+
 from clipoteca.engine import (
     DownloadInterrupted,
     UserFacingError,
     _format_options,
     _friendly_error,
+    _is_transient_error,
     analyze_url,
     download_item,
     get_preview,
@@ -96,10 +99,57 @@ class EngineTests(unittest.TestCase):
         with self.assertRaises(UserFacingError):
             _format_options("video", "4320")
 
+    def test_mp4_prefers_h264_with_audio_and_retains_compatible_fallbacks(self) -> None:
+        def stream(format_id, extension, video_codec, audio_codec, **metadata):
+            return {
+                "format_id": format_id, "ext": extension, "vcodec": video_codec,
+                "acodec": audio_codec, "url": f"https://example.invalid/{format_id}",
+                **metadata,
+            }
+
+        audio = stream("audio", "m4a", "none", "mp4a.40.2")
+        audio_only_mp4 = stream("audio-mp4", "mp4", "none", "mp4a.40.2")
+        muxed_h264 = stream("mp4-avc", "mp4", "avc1.42001e", "mp4a.40.2", height=360)
+        h264 = stream("avc720", "mp4", "avc1.64001f", "none", height=720)
+        av1 = stream("av11080", "mp4", "av01.0.08M.08", "none", height=1080)
+        cases = [
+            ("auto", [audio, h264, av1], ["avc720+audio"]),
+            ("auto", [audio, muxed_h264, av1], ["mp4-avc"]),
+            ("auto", [audio, av1], ["av11080+audio"]),
+            ("480", [audio, muxed_h264, h264, av1], ["mp4-avc"]),
+            ("auto", [audio_only_mp4], []),
+        ]
+
+        with YoutubeDL({"quiet": True, "simulate": True, "auto_init": False}) as ydl:
+            for quality, formats, expected in cases:
+                with self.subTest(quality=quality, expected=expected):
+                    selector = ydl.build_format_selector(_format_options("video", quality)[0][2]["format"])
+                    selected = selector({
+                        "formats": formats,
+                        "has_merged_format": muxed_h264 in formats,
+                        "incomplete_formats": formats == [audio_only_mp4],
+                    })
+                    self.assertEqual([item["format_id"] for item in selected], expected)
+
     def test_drm_error_has_a_clear_non_bypass_message(self) -> None:
         message = _friendly_error(RuntimeError("The requested site is known to use DRM protection"), action="analizar")
         self.assertIn("protegido con DRM", message)
         self.assertIn("opciones oficiales", message)
+
+    def test_disk_full_error_explains_how_to_recover(self) -> None:
+        message = _friendly_error(OSError(28, "No space left on device"), action="descargar")
+
+        self.assertIn("No hay espacio suficiente", message)
+        self.assertIn("cambia la carpeta", message)
+
+    def test_only_recoverable_transfer_failures_are_retried(self) -> None:
+        for detail in ("IncompleteRead(128 bytes read)", "HTTP Error 408", "[WinError 10054]"):
+            with self.subTest(detail=detail):
+                error = RuntimeError(detail)
+                self.assertTrue(_is_transient_error(error))
+                self.assertIn("conexión", _friendly_error(error, action="descargar"))
+        self.assertFalse(_is_transient_error(RuntimeError("HTTP Error 403")))
+        self.assertFalse(_is_transient_error(OSError(28, "No space left on device")))
 
     def test_drm_diagnostic_from_yt_dlp_logger_reaches_the_ui_error(self) -> None:
         class FakeDrmYDL(FakeYoutubeDL):
@@ -159,6 +209,91 @@ class EngineTests(unittest.TestCase):
                     progress=lambda _value: None,
                     should_stop=lambda: "pause",
                 )
+
+    def test_reports_separate_video_audio_and_merge_phases(self) -> None:
+        updates = []
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "Title [video-3].mp4"
+
+            class FakeMuxedDownload(FakeYoutubeDL):
+                def __init__(self, options):
+                    self.on_progress = options["progress_hooks"][0]
+                    self.on_postprocess = options["postprocessor_hooks"][0]
+
+                def download(self, _urls):
+                    for filename, stream, eta in (
+                        ("video.mp4", {"vcodec": "avc1", "acodec": "none"}, 8),
+                        ("audio.m4a", {"vcodec": "none", "acodec": "mp4a"}, 2),
+                    ):
+                        self.on_progress({
+                            "status": "downloading", "downloaded_bytes": 50,
+                            "total_bytes": 100, "eta": eta, "info_dict": stream,
+                        })
+                        self.on_progress({"status": "finished", "filename": filename})
+                    self.on_postprocess({"status": "started", "postprocessor": "Merger"})
+                    target.write_bytes(b"simulated merged output")
+                    self.on_postprocess({"status": "finished", "postprocessor": "Merger"})
+
+            with patch("clipoteca.engine.YoutubeDL", FakeMuxedDownload):
+                result = download_item(
+                    source_url="https://www.youtube.com/watch?v=video",
+                    source_id="video-3",
+                    title="Title",
+                    destination=directory,
+                    output_format="video",
+                    quality="auto",
+                    progress=updates.append,
+                    should_stop=lambda: None,
+                )
+
+        self.assertEqual(result["paths"], [str(target)])
+        self.assertEqual(
+            [(update["phase"], update.get("eta")) for update in updates],
+            [
+                ("video", 8), ("between_tracks", None), ("audio", 2),
+                ("between_tracks", None), ("merging", None), ("merging", None),
+            ],
+        )
+        self.assertEqual(
+            [[(step["id"], step["status"]) for step in update["steps"]] for update in updates],
+            [
+                [("video", "active"), ("audio", "pending"), ("merge", "pending")],
+                [("video", "done"), ("audio", "pending"), ("merge", "pending")],
+                [("video", "done"), ("audio", "active"), ("merge", "pending")],
+                [("video", "done"), ("audio", "done"), ("merge", "pending")],
+                [("video", "done"), ("audio", "done"), ("merge", "active")],
+                [("video", "done"), ("audio", "done"), ("merge", "done")],
+            ],
+        )
+
+    def test_does_not_report_an_intermediate_audio_track_as_completed_video(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            audio_track = Path(directory) / "Title [video-4].f140.m4a"
+
+            class FakeIncompleteDownload(FakeYoutubeDL):
+                def __init__(self, options):
+                    self.options = options
+
+                def download(self, _urls):
+                    audio_track.write_bytes(b"intermediate audio")
+                    self.options["progress_hooks"][0]({
+                        "status": "finished", "filename": str(audio_track),
+                    })
+                    return 0
+
+            with patch("clipoteca.engine.YoutubeDL", FakeIncompleteDownload):
+                with self.assertRaisesRegex(UserFacingError, "No se generó el archivo final MP4"):
+                    download_item(
+                        source_url="https://www.youtube.com/watch?v=video",
+                        source_id="video-4",
+                        title="Title",
+                        destination=directory,
+                        output_format="video",
+                        quality="auto",
+                        progress=lambda _value: None,
+                        should_stop=lambda: None,
+                    )
+            self.assertTrue(audio_track.is_file())
 
 
 if __name__ == "__main__":

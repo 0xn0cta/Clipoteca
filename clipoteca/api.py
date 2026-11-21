@@ -107,7 +107,7 @@ class DesktopApi:
         return self.database.get_preferences()
 
     def set_preferences(self, values: dict[str, Any]) -> dict[str, Any]:
-        allowed = {"concurrency_mode", "manual_concurrency", "auto_concurrency_cap"}
+        allowed = {"theme_mode", "theme_accent", "concurrency_mode", "manual_concurrency", "auto_concurrency_cap"}
         unexpected = set(values) - allowed
         if unexpected:
             return {"ok": False, "error": "Ajuste no permitido. Elige la carpeta con el selector del sistema."}

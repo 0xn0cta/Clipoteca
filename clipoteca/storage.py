@@ -4,9 +4,10 @@ import json
 import os
 import sqlite3
 import threading
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterator
 
 
 ACTIVE_STATUSES = ("queued", "downloading", "paused", "failed")
@@ -14,6 +15,18 @@ ACTIVE_STATUSES = ("queued", "downloading", "paused", "failed")
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _elapsed_seconds(started_at: str | None, ended_at: str) -> float:
+    if not started_at:
+        return 0.0
+    try:
+        return max(
+            0.0,
+            (datetime.fromisoformat(ended_at) - datetime.fromisoformat(started_at)).total_seconds(),
+        )
+    except ValueError:
+        return 0.0
 
 
 def app_data_dir() -> Path:
@@ -33,7 +46,6 @@ class Database:
         self._connection.execute("PRAGMA journal_mode=WAL")
         self._connection.execute("PRAGMA foreign_keys=ON")
         self._create_schema()
-        self._recover_interrupted_items()
 
     def _create_schema(self) -> None:
         with self._lock, self._connection:
@@ -62,9 +74,14 @@ class Database:
                     total_bytes INTEGER,
                     speed REAL,
                     eta REAL,
+                    download_phase TEXT,
+                    download_steps TEXT,
                     output_path TEXT,
                     error TEXT,
                     attempts INTEGER NOT NULL DEFAULT 0,
+                    download_attempt_started_at TEXT,
+                    download_elapsed_seconds REAL NOT NULL DEFAULT 0,
+                    completed_at TEXT,
                     updated_at TEXT NOT NULL
                 );
                 CREATE INDEX IF NOT EXISTS items_status_idx ON items(status);
@@ -73,16 +90,107 @@ class Database:
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS worker_actions (
+                    item_id TEXT PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+                    action TEXT NOT NULL
+                );
                 """
             )
-
-    def _recover_interrupted_items(self) -> None:
-        # Never silently start work after a crash. The user can resume these items.
-        with self._lock, self._connection:
+            columns = {
+                row["name"] for row in self._connection.execute("PRAGMA table_info(items)")
+            }
+            migrations = {
+                "download_attempt_started_at": "TEXT",
+                "download_elapsed_seconds": "REAL NOT NULL DEFAULT 0",
+                "completed_at": "TEXT",
+                "download_phase": "TEXT",
+                "download_steps": "TEXT",
+            }
+            for name, declaration in migrations.items():
+                if name not in columns:
+                    self._connection.execute(
+                        f"ALTER TABLE items ADD COLUMN {name} {declaration}"
+                    )
             self._connection.execute(
-                "UPDATE items SET status='paused', updated_at=? WHERE status='downloading'",
-                (utc_now(),),
+                "UPDATE items SET completed_at=updated_at "
+                "WHERE status='completed' AND completed_at IS NULL"
             )
+
+    def recover_interrupted_items(self) -> None:
+        """Mark orphaned downloads paused after the caller owns the worker lock."""
+        with self._lock, self._connection:
+            now = utc_now()
+            rows = self._connection.execute(
+                "SELECT id, download_attempt_started_at, download_elapsed_seconds "
+                "FROM items WHERE status='downloading'"
+            ).fetchall()
+            for row in rows:
+                elapsed = float(row["download_elapsed_seconds"] or 0)
+                elapsed += _elapsed_seconds(row["download_attempt_started_at"], now)
+                self._connection.execute(
+                    "UPDATE items SET status='paused', download_elapsed_seconds=?, "
+                    "download_attempt_started_at=NULL, updated_at=? "
+                    "WHERE id=? AND status='downloading'",
+                    (elapsed, now, row["id"]),
+                )
+            self._connection.execute(
+                "DELETE FROM worker_actions WHERE item_id IN "
+                "(SELECT id FROM items WHERE status='paused')"
+            )
+
+    def claim_queued_item(self, item_id: str) -> bool:
+        with self._lock, self._connection:
+            now = utc_now()
+            cursor = self._connection.execute(
+                "UPDATE items SET status='downloading', error=NULL, download_phase='preparing', "
+                "total_bytes=NULL, speed=NULL, eta=NULL, "
+                "download_attempt_started_at=?, updated_at=? WHERE id=? AND status='queued'",
+                (now, now, item_id),
+            )
+            return cursor.rowcount == 1
+
+    @contextmanager
+    def block_download_claims(self) -> Iterator[None]:
+        """Keep another connection from claiming a task during partial cleanup."""
+        with self._lock, self._connection:
+            self._connection.execute("BEGIN IMMEDIATE")
+            yield
+
+    def set_worker_action(self, item_id: str, action: str) -> str | None:
+        """Apply the action to a waiting item or signal its active worker."""
+        if action not in {"pause", "cancel"}:
+            raise ValueError("Acción de worker no válida.")
+        target_status = "cancelled" if action == "cancel" else "paused"
+        with self._lock, self._connection:
+            # Start the write transaction before inspecting the running state.
+            cursor = self._connection.execute(
+                "UPDATE items SET status=?, updated_at=?, "
+                "error=CASE WHEN ?='cancel' THEN NULL ELSE error END "
+                "WHERE id=? AND (status='queued' OR (status='paused' AND ?='cancel'))",
+                (target_status, utc_now(), action, item_id, action),
+            )
+            if cursor.rowcount:
+                self._connection.execute("DELETE FROM worker_actions WHERE item_id=?", (item_id,))
+                return target_status
+            cursor = self._connection.execute(
+                "INSERT INTO worker_actions(item_id, action) "
+                "SELECT id, ? FROM items WHERE id=? AND status='downloading' "
+                "ON CONFLICT(item_id) DO UPDATE SET action=excluded.action "
+                "WHERE worker_actions.action<>'cancel' OR excluded.action='cancel'",
+                (action, item_id),
+            )
+            return "downloading" if cursor.rowcount else None
+
+    def get_worker_action(self, item_id: str) -> str | None:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT action FROM worker_actions WHERE item_id=?", (item_id,)
+            ).fetchone()
+        return str(row["action"]) if row else None
+
+    def clear_worker_action(self, item_id: str) -> None:
+        with self._lock, self._connection:
+            self._connection.execute("DELETE FROM worker_actions WHERE item_id=?", (item_id,))
 
     def close(self) -> None:
         with self._lock:
@@ -157,14 +265,35 @@ class Database:
     def update_item(self, item_id: str, **values: Any) -> None:
         allowed = {
             "status", "progress", "downloaded_bytes", "total_bytes", "speed", "eta",
-            "output_path", "error", "attempts",
+            "output_path", "error", "attempts", "download_phase", "download_steps",
         }
         updates = {key: value for key, value in values.items() if key in allowed}
         if not updates:
             return
-        updates["updated_at"] = utc_now()
-        assignments = ", ".join(f"{key}=?" for key in updates)
         with self._lock, self._connection:
+            current = self._connection.execute(
+                "SELECT status, download_attempt_started_at, download_elapsed_seconds, completed_at "
+                "FROM items WHERE id=?",
+                (item_id,),
+            ).fetchone()
+            if not current:
+                return
+
+            now = utc_now()
+            next_status = updates.get("status")
+            if next_status == "downloading":
+                if current["status"] != "downloading" or not current["download_attempt_started_at"]:
+                    updates["download_attempt_started_at"] = now
+            elif next_status is not None and current["status"] == "downloading":
+                elapsed = float(current["download_elapsed_seconds"] or 0)
+                elapsed += _elapsed_seconds(current["download_attempt_started_at"], now)
+                updates["download_elapsed_seconds"] = elapsed
+                updates["download_attempt_started_at"] = None
+
+            if next_status == "completed" and not current["completed_at"]:
+                updates["completed_at"] = now
+            updates["updated_at"] = now
+            assignments = ", ".join(f"{key}=?" for key in updates)
             self._connection.execute(
                 f"UPDATE items SET {assignments} WHERE id=?",
                 (*updates.values(), item_id),

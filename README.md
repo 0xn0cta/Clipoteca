@@ -57,6 +57,17 @@ Para desarrollo con Vite Hot Module Replacement, ejecuta `npm run dev` dentro de
 python main.py --dev
 ```
 
+## Automatizar desde consola
+
+Con el entorno Python del proyecto activo, consulta los comandos disponibles:
+
+```powershell
+python -m clipoteca.cli --help
+python -m clipoteca.cli --json status
+```
+
+La CLI comparte la cola y las preferencias locales con la aplicación. `download` permite ejecutar en segundo plano con `--wait`; para una playlist hay que indicar `--all` o seleccionar elementos con `--item`. Sin `--wait`, el lote se añade a la cola persistente para que lo procese Clipoteca abierta o un worker activo. La guía completa está en [`docs/CLI.md`](docs/CLI.md). El ejecutable de consola independiente todavía no se incluye en un instalador.
+
 ## Funcionalidades implementadas en esta fase
 
 - Interfaz oscura en español con dirección de diseño **Archivo personal premium**.

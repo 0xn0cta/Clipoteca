@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import json
+import os
 import threading
 import time
 import uuid
@@ -15,7 +16,8 @@ from .engine import (
     safe_filename,
     validate_source_url,
 )
-from .storage import ACTIVE_STATUSES, Database
+from .storage import Database
+from .worker_lock import WorkerLock
 
 
 logger = logging.getLogger("clipoteca.manager")
@@ -36,8 +38,10 @@ class DownloadManager:
         self.downloader = downloader
         self._lock = threading.RLock()
         self._running: dict[str, threading.Thread] = {}
-        self._actions: dict[str, str] = {}
+        self._running_targets: dict[str, str] = {}
+        self._active_output_targets: set[str] = set()
         self._stopping = threading.Event()
+        self._worker_lock = WorkerLock(database.path.with_suffix(database.path.suffix + ".worker.lock"))
         self._auto_target = 1
         self._last_auto_sample = 0.0
         self._last_auto_speed: float | None = None
@@ -52,33 +56,36 @@ class DownloadManager:
                 "destination",
                 str(Path.home() / "Downloads" / "Clipoteca"),
             )
+        if self.database.get_preference("theme_mode") not in {"system", "dark", "light"}:
+            self.database.set_preference("theme_mode", "system")
         if self.database.get_preference("concurrency_setup_confirmed") is not True:
             for key in ("concurrency_mode", "manual_concurrency", "auto_concurrency_cap"):
                 if self.database.get_preference(key) is not None:
                     self.database.set_preference(key, None)
 
     def start(self) -> None:
-        if self._scheduler and self._scheduler.is_alive():
-            return
-        self._stopping.clear()
-        self._scheduler = threading.Thread(target=self._schedule, name="clipoteca-queue", daemon=True)
-        self._scheduler.start()
+        with self._lock:
+            if self._scheduler and self._scheduler.is_alive():
+                return
+            self._stopping.clear()
+            self._scheduler = threading.Thread(target=self._schedule, name="clipoteca-queue", daemon=True)
+            self._scheduler.start()
 
     def shutdown(self, *, pause_active: bool = True, timeout: float = 40) -> None:
         if pause_active:
             self.pause_all(wait=True, timeout=timeout)
-        self._stopping.set()
-        if self._scheduler:
-            self._scheduler.join(timeout=2)
         with self._lock:
-            workers = list(self._running.values())
-        for worker in workers:
-            worker.join(timeout=max(0, timeout))
+            self._stopping.set()
+            scheduler = self._scheduler
+        if scheduler:
+            scheduler.join(timeout=max(0, timeout))
 
     def get_state(self) -> dict[str, Any]:
         state = self.database.get_queue_state()
         for item in (*state["queue"], *state["history"]):
             item["output_paths"] = _decode_output_paths(item.get("output_path"))
+            if item.get("download_steps"):
+                item["download_steps"] = json.loads(item["download_steps"])
         state["active_downloads"] = sum(
             1 for item in state["queue"] if item["status"] == "downloading"
         )
@@ -97,6 +104,10 @@ class DownloadManager:
         rows = self.database.items_with_status(("queued", "downloading"))
         return bool(rows)
 
+    @property
+    def owns_worker(self) -> bool:
+        return self._worker_lock.acquired
+
     def set_preferences(self, values: dict[str, Any]) -> dict[str, Any]:
         updates: dict[str, Any] = {}
         if "destination" in values:
@@ -104,6 +115,18 @@ class DownloadManager:
             if not destination.is_absolute():
                 raise ValueError("La carpeta de destino debe ser una ruta absoluta.")
             updates["destination"] = str(destination)
+
+        if "theme_mode" in values:
+            theme_mode = str(values["theme_mode"])
+            if theme_mode not in {"system", "dark", "light"}:
+                raise ValueError("Modo de tema no válido.")
+            updates["theme_mode"] = theme_mode
+
+        if "theme_accent" in values:
+            theme_accent = str(values["theme_accent"])
+            if theme_accent not in {"clipoteca", "iris", "blue", "green", "amber"}:
+                raise ValueError("Color de acento no válido.")
+            updates["theme_accent"] = theme_accent
 
         current_mode = self.database.get_preference("concurrency_mode")
         mode = values.get("concurrency_mode", current_mode)
@@ -144,6 +167,8 @@ class DownloadManager:
         selected_ids: list[str],
         output_format: str,
         quality: str,
+        *,
+        start_worker: bool = True,
     ) -> dict[str, Any]:
         if output_format not in {"video", "audio", "both"}:
             raise ValueError("Formato de salida no válido.")
@@ -185,78 +210,101 @@ class DownloadManager:
             for item in selected_items
         ]
         self.database.create_batch(batch, items)
-        self.start()
+        if start_worker:
+            self.start()
         return {"batch_id": batch_id, "queued": len(items)}
 
-    def retry_item(self, item_id: str) -> None:
+    def retry_item(self, item_id: str, *, start_worker: bool = True) -> None:
         item = self.database.get_item(item_id)
         if not item or item["status"] != "failed":
             raise ValueError("Este elemento no está disponible para reintento.")
+        self.database.clear_worker_action(item_id)
         self.database.update_item(item_id, status="queued", progress=0, error=None, attempts=0)
-        self.start()
+        if start_worker:
+            self.start()
 
     def pause_all(self, *, wait: bool = False, timeout: float = 40) -> None:
+        downloading_ids: list[str] = []
         with self._lock:
-            rows = self.database.items_with_status(ACTIVE_STATUSES)
+            rows = self.database.items_with_status(("queued", "downloading"))
             for item in rows:
-                item_id = item["id"]
-                if item["status"] == "downloading":
-                    self._actions.setdefault(item_id, "pause")
-                elif item["status"] == "queued":
-                    self.database.update_item(item_id, status="paused")
+                if self.database.set_worker_action(item["id"], "pause") == "downloading":
+                    downloading_ids.append(item["id"])
         if wait:
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
-                with self._lock:
-                    if not self._running:
-                        break
+                if not any(
+                    (item := self.database.get_item(item_id))
+                    and item["status"] == "downloading"
+                    for item_id in downloading_ids
+                ):
+                    break
                 time.sleep(0.1)
 
-    def resume_all(self) -> None:
+    def resume_all(self, *, start_worker: bool = True) -> None:
         for item in self.database.items_with_status(("paused",)):
+            self.database.clear_worker_action(item["id"])
             self.database.update_item(item["id"], status="queued", error=None)
-        self.start()
+        for item in self.database.items_with_status(("downloading",)):
+            if self.database.get_worker_action(item["id"]) == "pause":
+                self.database.clear_worker_action(item["id"])
+        if start_worker:
+            self.start()
 
     def cancel_item(self, item_id: str) -> None:
         with self._lock:
             item = self.database.get_item(item_id)
-            if not item or item["status"] not in ACTIVE_STATUSES:
-                return
-            if item["status"] == "downloading":
-                self._actions[item_id] = "cancel"
-            else:
-                self.database.mark_cancelled(item_id)
-                self._remove_partials(item)
+            if item and self.database.set_worker_action(item_id, "cancel") == "cancelled":
+                self._remove_inactive_partials(item)
 
     def cancel_all(self, *, wait: bool = True, timeout: float = 40) -> None:
+        downloading_ids: list[str] = []
         with self._lock:
-            rows = self.database.items_with_status(ACTIVE_STATUSES)
+            rows = self.database.items_with_status(("queued", "downloading", "paused"))
             for item in rows:
-                if item["status"] == "downloading":
-                    self._actions[item["id"]] = "cancel"
-                else:
-                    self.database.mark_cancelled(item["id"])
-                    self._remove_partials(item)
+                status = self.database.set_worker_action(item["id"], "cancel")
+                if status == "downloading":
+                    downloading_ids.append(item["id"])
+                elif status == "cancelled":
+                    self._remove_inactive_partials(item)
         if wait:
             deadline = time.monotonic() + timeout
             while time.monotonic() < deadline:
-                with self._lock:
-                    if not self._running:
-                        break
+                if not any(
+                    (item := self.database.get_item(item_id))
+                    and item["status"] == "downloading"
+                    for item_id in downloading_ids
+                ):
+                    break
                 time.sleep(0.1)
 
     def clear_history(self) -> int:
         return self.database.clear_history()
 
     def _schedule(self) -> None:
-        while not self._stopping.is_set():
-            try:
-                self._launch_ready_items()
-            except Exception:
-                logger.exception("Error inesperado al programar la cola")
-            self._stopping.wait(0.25)
+        try:
+            while not self._stopping.is_set():
+                try:
+                    if not self._worker_lock.acquired:
+                        if not self._worker_lock.acquire():
+                            self._stopping.wait(0.25)
+                            continue
+                        self.database.recover_interrupted_items()
+                    self._launch_ready_items()
+                except Exception:
+                    logger.exception("Error inesperado al programar la cola")
+                self._stopping.wait(0.25)
+        finally:
+            # A timed-out caller can return while a download still owns its files.
+            with self._lock:
+                workers = list(self._running.values())
+            for worker in workers:
+                worker.join()
+            self._worker_lock.release()
 
     def _launch_ready_items(self) -> None:
+        if not self._worker_lock.acquired:
+            return
         with self._lock:
             queued = self.database.items_with_status(("queued",))
             if not queued:
@@ -277,8 +325,14 @@ class DownloadManager:
             else:
                 return
             slots = max(0, target - len(self._running))
-            for item in queued[:slots]:
+            started = 0
+            for item in queued:
+                if started >= slots:
+                    break
                 if item["id"] in self._running:
+                    continue
+                output_target = self._output_target(item)
+                if output_target in self._active_output_targets:
                     continue
                 current = self.database.get_item(item["id"])
                 if not current or current["status"] != "queued":
@@ -290,7 +344,29 @@ class DownloadManager:
                     daemon=True,
                 )
                 self._running[item["id"]] = thread
-                thread.start()
+                self._running_targets[item["id"]] = output_target
+                self._active_output_targets.add(output_target)
+                try:
+                    thread.start()
+                except Exception:
+                    self._release_running_item(item["id"])
+                    raise
+                started += 1
+
+    @staticmethod
+    def _output_target(item: dict[str, Any]) -> str:
+        destination = Path(item["destination"])
+        if item["is_playlist"]:
+            destination = destination / safe_filename(item["batch_title"])
+        base_name = f"{safe_filename(item['title'])} [{safe_filename(item['source_id'], 48)}]"
+        return os.path.normcase(str(destination / base_name))
+
+    def _release_running_item(self, item_id: str) -> None:
+        with self._lock:
+            self._running.pop(item_id, None)
+            output_target = self._running_targets.pop(item_id, None)
+            if output_target:
+                self._active_output_targets.discard(output_target)
 
     def _adjust_auto_target(self, queued: list[dict[str, Any]]) -> None:
         if self.database.get_preference("concurrency_mode") != "auto":
@@ -317,20 +393,23 @@ class DownloadManager:
         self._last_auto_sample = now
 
     def _run_item(self, item_id: str) -> None:
-        with self._lock:
-            item = self.database.get_item(item_id)
-            if not item or item["status"] != "queued":
-                self._running.pop(item_id, None)
-                return
-            self.database.update_item(item_id, status="downloading", error=None)
-        destination = Path(item["destination"])
-        if item["is_playlist"]:
-            destination = destination / safe_filename(item["batch_title"])
-
+        claimed = False
         try:
+            with self._lock:
+                item = self.database.get_item(item_id)
+                if not item or not self.database.claim_queued_item(item_id):
+                    return
+                claimed = True
+            destination = Path(item["destination"])
+            if item["is_playlist"]:
+                destination = destination / safe_filename(item["batch_title"])
+
             for attempt in range(4):
-                self.database.update_item(item_id, attempts=attempt)
+                self.database.update_item(item_id, attempts=attempt, download_phase="preparing")
                 try:
+                    action = self._get_action(item_id)
+                    if action:
+                        raise DownloadInterrupted(action)
                     result = self.downloader(
                         source_url=item["source_url"],
                         source_id=item["source_id"],
@@ -359,15 +438,20 @@ class DownloadManager:
                     self._notify_batch_if_finished(item["batch_id"])
                     return
                 except DownloadInterrupted as exc:
-                    if exc.action == "cancel" or self._get_action(item_id) == "cancel":
+                    action = self._get_action(item_id)
+                    if exc.action == "cancel" or action == "cancel":
                         self._remove_partials(item)
                         self.database.mark_cancelled(item_id)
-                    else:
+                    elif action == "pause":
                         self.database.update_item(item_id, status="paused", error=None)
+                    else:
+                        self.database.update_item(item_id, status="queued", error=None)
                     return
                 except UserFacingError as exc:
                     if exc.retryable and attempt < 3:
-                        self.database.update_item(item_id, status="downloading", error=None)
+                        self.database.update_item(
+                            item_id, download_phase="retrying", total_bytes=None, eta=None, speed=None,
+                        )
                         if self._wait_or_stop(item_id, 2 ** attempt):
                             continue
                         action = self._get_action(item_id)
@@ -392,11 +476,14 @@ class DownloadManager:
                     self._notify_batch_if_finished(item["batch_id"])
                     return
         finally:
-            with self._lock:
-                self._actions.pop(item_id, None)
-                self._running.pop(item_id, None)
+            try:
+                if claimed:
+                    self.database.clear_worker_action(item_id)
+            finally:
+                self._release_running_item(item_id)
 
     def _update_progress(self, item_id: str, value: dict[str, Any]) -> None:
+        steps = {"download_steps": json.dumps(value["steps"])} if "steps" in value else {}
         self.database.update_item(
             item_id,
             progress=float(value.get("progress") or 0),
@@ -404,11 +491,12 @@ class DownloadManager:
             total_bytes=value.get("total_bytes"),
             speed=value.get("speed"),
             eta=value.get("eta"),
+            download_phase=value.get("phase"),
+            **steps,
         )
 
     def _get_action(self, item_id: str) -> str | None:
-        with self._lock:
-            return self._actions.get(item_id)
+        return self.database.get_worker_action(item_id)
 
     def _wait_or_stop(self, item_id: str, seconds: int) -> bool:
         deadline = time.monotonic() + seconds
@@ -417,6 +505,14 @@ class DownloadManager:
                 return False
             time.sleep(0.1)
         return True
+
+    def _remove_inactive_partials(self, item: dict[str, Any]) -> None:
+        target = self._output_target(item)
+        with self.database.block_download_claims():
+            for downloading in self.database.items_with_status(("downloading",)):
+                if self._output_target(downloading) == target:
+                    return
+            self._remove_partials(item)
 
     def _remove_partials(self, item: dict[str, Any]) -> None:
         destination = Path(item["destination"])

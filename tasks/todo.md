@@ -217,6 +217,7 @@
 - [ ] La UI distingue pendiente, descargando, completado y fallido.
 
 **Verificación:** tests con yt-dlp mock; smoke manual solo con URL autorizada, marcado como manual.
+**Reverificación de compatibilidad:** para MP4, el selector da prioridad a H.264 cuando está disponible y respeta el límite de resolución. Las pruebas con metadatos simulados cubren H.264, el fallback a AV1, el límite de altura y el rechazo de una fuente con solo audio. Pasaron 84 pruebas Python y 7 subpruebas. Se comprobó localmente la pista AV1 del archivo existente con FFmpeg, sin iniciar una descarga real.
 **Dependencias:** T08, T11, T12, T13.
 **Archivos previstos:** `clipoteca/services/download.py`, `clipoteca/desktop_api.py`, `frontend/src/components/DownloadAction.tsx`, tests asociados.
 **Alcance:** M.
@@ -261,6 +262,8 @@
 - [ ] El estado se recupera con un snapshot al abrir la vista, además de eventos en vivo.
 
 **Verificación:** tests reducer/hooks de eventos repetidos, desconocidos, fuera de orden y progress null.
+**Verificación parcial:** los callbacks simulados y el smoke de interfaz cubren pista de vídeo, pista de audio, unión, transcurrido y restante estimado por fase. El contador queda indeterminado al unir o si faltan datos de transferencia. Build, lint y 85 pruebas Python con 7 subpruebas pasan.
+**Reverificación de pasos:** los callbacks marcan cada paso en curso o completado y la cola los presenta en orden según la transferencia y el procesamiento reales. Pasaron 88 pruebas Python y 10 subpruebas, build, lint y los smokes T39/T40 con datos simulados.
 **Dependencias:** T04, T16.
 **Archivos previstos:** `frontend/src/types/bridge.ts`, `frontend/src/hooks/use-download-queue.ts`, `frontend/src/components/DownloadQueue.tsx`, tests asociados.
 **Alcance:** M.
@@ -289,6 +292,7 @@
 - [ ] `.part` se conserva/reanuda solo cuando yt-dlp lo permite; duplicado final se omite.
 
 **Verificación:** tests cancel token, retry, partial resume y terminal errors; no iniciar una descarga real.
+**Verificación parcial:** 87 pruebas Python y 10 subpruebas pasan. Los cortes recuperables tienen tres reintentos con espera creciente y limpian el ETA antiguo mientras esperan. Una pista intermedia sin archivo final produce error y se conserva para reintento.
 **Dependencias:** T14, T16, T18.
 **Archivos previstos:** `clipoteca/services/download.py`, `clipoteca/queue_manager.py`, `frontend/src/components/DownloadQueue.tsx`, tests asociados.
 **Alcance:** M.
@@ -325,6 +329,7 @@
 - [ ] Errores no terminales no eliminan selección ni opciones del usuario.
 
 **Verificación:** tabla de tests frontend para cada código de error y recovery action.
+**Progreso parcial:** el motor ahora traduce `ENOSPC`/“No space left on device” a un mensaje en español que pide liberar espacio o cambiar el destino; `test_disk_full_error_explains_how_to_recover` pasa. T21 sigue abierto: falta completar el mapa y la recuperación de UI.
 **Dependencias:** T06–T20.
 **Archivos previstos:** `clipoteca/errors.py`, `frontend/src/components/ErrorNotice.tsx`, `frontend/src/components/DownloadQueue.tsx`, tests asociados.
 **Alcance:** M.
@@ -418,3 +423,265 @@
 - [ ] El propietario prueba el instalador y el flujo con material autorizado.
 - [ ] Issues visuales/funcionales se registran como nuevas tareas, no se arreglan con cambios de alcance invisibles.
 - [ ] No publicar release ni merge a main hasta aprobación explícita.
+
+## Extensión posterior — CLI local automatizable
+
+### T28 — Definir contrato y punto de entrada de consola
+
+**Descripción:** establecer una CLI sin GUI que reutilice la lógica local de Clipoteca y ofrezca una interfaz estable para scripts.
+
+**Criterios de aceptación:**
+- [x] `python -m clipoteca.cli --help` y `--version` funcionan sin importar/iniciar pywebview.
+- [x] Se documentan comandos, esquema JSON, códigos de salida y canales de progreso.
+- [x] Los argumentos pasan por validación tipada; no hay ejecución arbitraria de shell ni métodos genéricos del puente.
+
+**Verificación:** tests del parser, `--help`, salida JSON y errores; sin red ni descargas.
+**Resultado:** `python -m unittest discover -s tests -v` y `python -m pytest -q` pasan (30 tests, 4 subtests); `--help`, `--version`, argumentos anidados, salida JSON y rechazo de hosts ajenos comprobados.
+**Dependencias:** ninguna.
+**Archivos previstos:** `clipoteca/cli.py`, `clipoteca/__main__.py`, `tests/test_cli.py`, `docs/CLI.md`.
+**Alcance:** S.
+
+### T29 — Exponer estado, análisis y vista previa
+
+**Descripción:** permitir consultar disponibilidad local, analizar URLs y obtener la misma información de vista previa que la app.
+
+**Criterios de aceptación:**
+- [x] `status`, `analyze` y `preview` tienen salida legible y JSON estable.
+- [x] El análisis/preview nunca inicia una descarga; el backend mantiene YouTube-only y los errores en español/código estable.
+- [x] Preview no escribe archivos y documenta cómo consumir el flujo reproducible si existe.
+
+**Verificación:** yt-dlp simulado; casos inválidos, playlist vacía, preview no reproducible y motor/FFmpeg ausentes.
+**Resultado:** 37 tests Python y 4 subtests pasan; CLI `status --json` verificó yt-dlp 2026.10.26 y FFmpeg/ffprobe 9.1 disponibles. Pruebas de análisis/preview mockeadas. Por error ejecuté una consulta de metadatos con el ID de ejemplo `demo`; YouTube la rechazó como ID incompleto y no se descargó ningún archivo.
+**Dependencias:** T28.
+**Archivos previstos:** `clipoteca/cli.py`, servicios existentes, `tests/test_cli.py`, `docs/CLI.md`.
+**Alcance:** M.
+
+### T30 — Coordinar el worker entre GUI y CLI
+
+**Descripción:** impedir que la GUI y la CLI arranquen schedulers que compitan por la misma cola SQLite y permitir que las acciones de cola lleguen al proceso worker.
+
+**Criterios de aceptación:**
+- [x] Un solo proceso obtiene la propiedad de ejecución de descargas para el almacén local.
+- [x] Los demás procesos pueden consultar/encolar; pausa/cancelación se transmiten al worker activo mediante señales SQLite o devuelven un error recuperable, nunca simulan éxito.
+- [x] La recuperación de tareas interrumpidas ocurre solo después de adquirir el lock; una salida/cierre inesperado lo libera.
+
+**Verificación:** pruebas multiproceso con almacén temporal: adquisición, contención, señales de acción, liberación y recuperación; confirmar que solo un worker ejecuta cada tarea y que cancelar no oculta fallos reintentables.
+**Resultado:** 44 tests Python y 4 subtests pasan; pruebas de lock multiproceso, caída del owner, encolado desde segundo manager, pausa/cancelación interproceso y recuperación. `npm run build` y `npm run lint` pasan.
+**Reverificación:** 81 pruebas Python y 2 subpruebas pasan. Las regresiones cubren cancelación antes y después de que el worker reclame la tarea y comprueban desde otro proceso que el bloqueo sigue ocupado hasta que termina una descarga activa, incluso si vence el plazo de cierre. Build y lint del frontend pasan en una copia aislada. Se usaron descargas simuladas y SQLite temporal.
+**Dependencias:** T28.
+**Archivos previstos:** `clipoteca/manager.py`, `clipoteca/storage.py`, `clipoteca/worker_lock.py`, pruebas de manager/CLI.
+**Alcance:** M.
+
+### T31 — Ejecutar descargas headless
+
+**Descripción:** descargar video/audio/ambos desde consola, elegir elementos y calidad, e informar progreso/resultado sin abrir la UI.
+
+**Criterios de aceptación:**
+- [x] Acepta video individual y playlist con selección de elementos, formato, calidad y destino validados.
+- [x] Puede esperar el resultado con un código de salida útil; Ctrl+C pausa/interrumpe según el contrato y no deja estados falsos.
+
+**Verificación:** tests mock de éxito, fallo, cancelación, destino y selección; smoke manual solo con material propio/autorizado.
+**Resultado:** 51 tests Python y 3 subtests pasan; se validaron selección, destino, éxito/fallo, progreso JSONL y Ctrl+C con mocks. Build y lint del frontend pasan. No hice descarga manual real.
+**Dependencias:** T28–T30.
+**Archivos previstos:** `clipoteca/cli.py`, `clipoteca/manager.py`, servicios existentes, pruebas.
+**Alcance:** M.
+
+### T32 — Gestionar cola e historial desde consola
+
+**Descripción:** exponer consulta y acciones de recuperación sobre los mismos registros que usa la app.
+
+**Criterios de aceptación:**
+- [x] Incluye listar, pausar/reanudar, cancelar por ID, cancelar lote y reintentar fallos.
+- [x] Incluye listar/abrir/limpiar historial; limpiar registros nunca borra medios.
+- [x] Las acciones destructivas no se confirman silenciosamente; los fallidos no desaparecen al cancelar trabajos activos.
+
+**Verificación:** pruebas contra SQLite temporal para cada estado, permisos, cancelación, reintento e historial.
+**Resultado:** 64 tests Python pasan; CLI prueba operaciones/confirmaciones con mocks y manager usa SQLite temporal. Build y lint pasan.
+**Dependencias:** T28, T30–T31.
+**Archivos previstos:** `clipoteca/cli.py`, `clipoteca/manager.py`, `clipoteca/storage.py`, pruebas.
+**Alcance:** M.
+
+### T33 — Gestionar preferencias en flujos no interactivos
+
+**Descripción:** consultar y configurar destino/concurrencia desde scripts sin diálogo gráfico.
+
+**Criterios de aceptación:**
+- [x] `settings show/set` comparte y valida las preferencias de la app.
+- [x] La configuración inicial no se preselecciona silenciosamente; la CLI requiere parámetros explícitos y no muestra prompts en modo automatizado.
+- [x] Destinos son absolutos y validados; la ruta se guarda en la preferencia local compartida.
+
+**Verificación:** tests de defaults, valor alto, entrada inválida, persistencia y salida JSON.
+**Resultado:** 66 tests Python pasan; cobertura de persistencia con almacén temporal, concurrencia manual 250, modo inicial explícito y ruta relativa rechazada. Build y lint pasan.
+**Dependencias:** T28.
+**Archivos previstos:** `clipoteca/cli.py`, `clipoteca/manager.py`, `tests/test_cli.py`, `docs/CLI.md`.
+**Alcance:** S.
+
+### T34 — Empaquetar y aceptar la CLI
+
+**Descripción:** distribuir un launcher de consola, documentar automatización y verificar flujos completos.
+
+**Criterios de aceptación:**
+- [ ] El instalador ofrece `clipoteca-cli.exe` separado de la app gráfica y conserva los datos compartidos.
+- [ ] README/docs incluyen ejemplos PowerShell, JSON, códigos de salida, límites y errores comunes.
+- [ ] CI prueba comandos y flujo headless con servicios mock; no usa URLs reales.
+
+**Verificación:** build/instalación/actualización en Windows limpio; smoke CLI sin GUI, más verificación de concurrencia con la app.
+**Dependencias:** T23, T24, T25, T28–T33, T01–T02.
+**Archivos previstos:** `pyinstaller.spec`, `packaging/build.ps1`, `packaging/installer/`, `docs/CLI.md`, `README.md`, pruebas.
+**Alcance:** M.
+
+### Checkpoint CLI — Revisión del propietario
+
+- [ ] Flujo automatizado de análisis → selección → descarga → historial se ejecuta sin GUI.
+- [ ] Contrato JSON/códigos de salida y comportamiento al coexistir con GUI quedan revisados.
+- [ ] Solo después de aprobación se integra el launcher en el instalador/release.
+
+### T35 — Serializar tareas que comparten archivo de salida
+
+**Descripción:** evitar que lotes/reintentos del mismo video escriban concurrentemente el mismo destino/nombre cuando la concurrencia global es mayor que uno.
+
+**Criterios de aceptación:**
+- [x] La identidad de salida usa la misma sanitización, carpeta de playlist, título e ID que la descarga real.
+- [x] Dos tareas con la misma identidad no corren simultáneamente; tareas con identidades distintas sí pueden usar otros workers.
+- [x] Al terminar la primera, la siguiente detecta el archivo existente y no lo sobrescribe.
+
+**Verificación:** pruebas con downloader lento simulado, dos lotes del mismo elemento y una tarea diferente; comprobar concurrencia y no sobrescritura.
+**Resultado:** `test_jobs_with_same_output_target_are_serialized` comprueba que se serialicen los destinos duplicados mientras una tarea distinta sí usa el segundo worker.
+**Reverificación:** 82 pruebas Python y 2 subpruebas pasan. La regresión usa dos gestores con conexiones SQLite independientes y comprueba que cancelar el duplicado conserva el parcial de la descarga activa y permite que esta se complete.
+**Dependencias:** T30, T31.
+**Archivos previstos:** `clipoteca/manager.py`, `tests/test_manager.py`.
+**Alcance:** S.
+
+## Extensión visual — Rediseño Clipoteca Media Workspace
+
+### T36 — Persistir modo de tema
+
+**Descripción:** compartir la preferencia `system/dark/light` entre la GUI y la CLI, sin cambiar el tema por defecto de manera silenciosa.
+
+**Criterios de aceptación:**
+- [x] El backend valida y persiste `theme_mode` junto con las preferencias locales existentes.
+- [x] La API de escritorio permite actualizar solo el conjunto explícito de preferencias.
+- [x] La CLI `settings show/set` muestra y cambia `theme_mode` sin prompts.
+
+**Verificación:** tests de default `system`, persistencia, valores inválidos y GUI/CLI sobre el mismo SQLite.
+**Resultado:** 71 tests Python pasan; tema `system` por defecto, validación y persistencia GUI/API/CLI comprobadas. Build y lint pasan.
+**Dependencias:** ninguna.
+**Archivos previstos:** `clipoteca/manager.py`, `clipoteca/api.py`, `clipoteca/cli.py`, pruebas.
+**Alcance:** M.
+
+### T37 — Implementar sistema de color automático y overrides
+
+**Descripción:** introducir tokens claros/oscuros con detección del tema del sistema y un selector manual accesible.
+
+**Criterios de aceptación:**
+- [x] `system` sigue `prefers-color-scheme`; Claro/Oscuro prevalecen hasta que se cambie la preferencia.
+- [x] Controles nativos actualizan `color-scheme`; contraste/foco/estados semánticos son legibles en ambos temas.
+- [x] No hay flash o estado incoherente al cargar preferencias desde pywebview.
+
+**Verificación:** pruebas de sincronización de preferencia y visual en temas oscuro/claro; build y lint.
+**Resultado:** 71 tests Python pasan; Playwright verifica detección del tema del sistema, override persistente, reflow a 390px y capturas oscuro/claro. Pares de contraste de texto/foco revisados. Build y lint pasan.
+**Dependencias:** T36.
+**Archivos previstos:** `frontend/index.html`, `frontend/src/index.css`, `frontend/src/App.tsx`, `frontend/src/App.css`, `frontend/src/assets/clipoteca-mark.svg`, `frontend/public/favicon.svg`, pruebas.
+**Alcance:** M.
+
+### T38 — Rehacer el shell con sidebar adaptable
+
+**Descripción:** sustituir el top-nav actual por una navegación lateral compacta, manteniendo las rutas funcionales actuales.
+
+**Criterios de aceptación:**
+- [x] Preparar, Cola e Historial se alcanzan desde sidebar con nombre accesible y estado activo claro; Ajustes sigue disponible.
+- [x] Sidebar se colapsa de manera estructural en ventanas estrechas y no provoca overflow horizontal.
+- [x] Ventana compacta, maximizada y fullscreen se adaptan sin estirar el contenido fuera de lectura.
+
+**Verificación:** inspección en 1440×920, ventana mínima prevista y 390×844; navegación por teclado.
+**Resultado:** `npm run build`, `npm run lint`, `python -m pytest -q` (71 passed) y Playwright contra build con bridge simulado: navegación/aria-current, foco por teclado, Ajustes, sin overflow a 360/390/800/1440/1920px. Sidebar 228px/72px/58px; capturas desktop, 800×640 y 390×844 en `.impeccable/review/t38-shell-*.png`. `main.py` ahora permite ventana mínima 800×640. `npm test` no está definido.
+**Reverificación:** el control manual de la barra lateral mantiene el foco al contraer o expandir y conserva la vista activa. El smoke verifica 228 px y 72 px en escritorio y el colapso automático a 58 px en 390 px.
+**Dependencias:** T37.
+**Archivos previstos:** `main.py`, `frontend/src/App.tsx`, `frontend/src/App.css`, `frontend/src/index.css`.
+**Alcance:** M.
+
+### T39 — Rediseñar preparación y preview
+
+**Descripción:** ordenar el flujo de origen, playlist, preview y opciones en una composición lista+preview que conserve todas las acciones existentes.
+
+**Criterios de aceptación:**
+- [x] Cada fila muestra la miniatura junto al checkbox; pulsarla abre ese video en un reproductor oficial de YouTube integrado, sin cambiar la selección de descarga.
+- [x] El panel lateral muestra el elemento abierto y su duración; carga/estado vacío son claros, el reproductor explica sus propias restricciones y nunca se implica guardado local.
+- [x] No hay acción redundante «Ver selección»; el thumbnail respeta 120×70 px y el player 200×200 px, sin autoplay.
+- [x] La build de escritorio pasa la ruta local a PyWebView en vez de `file://`, para servir la interfaz por HTTP y permitir el `Referer` del reproductor.
+- [x] Playlist sigue primero y legible; las opciones de formato, calidad y destino permanecen visibles y compactas.
+- [x] Análisis, selección, calidad, formato, destino y descarga conservan el contrato de backend.
+
+**Verificación:** pruebas mock de thumbnails, apertura del reproductor y selección independiente; smoke de UI en desktop/compacto sin cargar fuentes externas ni descargar archivos.
+**Resultado:** `npm run build`, `npm run lint` y `python tests/ui_smoke_t39.py` pasan; `tests/test_main.py` comprueba que se pasa la ruta de archivo local y `http_server=True`. El smoke UI comprueba `Referer` local, thumbnails/player con tamaño mínimo, ausencia de autoplay, que no exista «Ver selección», selección independiente, metadatos y 390px sin overflow; usa un iframe mock, sin llamadas a YouTube ni descargas. Capturas en `.impeccable/review/t39-preview-*.png`. El error real 153 aún requiere una prueba con la app reiniciada.
+**Reverificación:** el smoke también comprueba apertura por teclado, foco de vuelta al cerrar, indicador de la miniatura activa y acceso al reproductor en 390 px. Volver a abrir la misma vista previa conserva el reproductor y el estado de carga.
+**Dependencias:** T38.
+**Archivos previstos:** `main.py`, `frontend/src/App.tsx`, `frontend/src/App.css`, `docs/IMPLEMENTATION_SPEC.md`, pruebas.
+**Alcance:** M.
+
+### T40 — Adaptar cola, historial y ajustes al nuevo sistema
+
+**Descripción:** aplicar navegación, tema, densidad y estados coherentes a las vistas restantes y al flujo de cierre.
+
+**Criterios de aceptación:**
+- [x] Cola/historial/ajustes comparten sidebar, superficies, tipografía, focos y feedback de errores.
+- [x] Se conservan acciones de pausa, reanudación, cancelación, reintento, abrir/limpiar historial y cierre a bandeja.
+- [x] Progreso desconocido y errores siguen siendo distinguibles sin depender solo del color.
+- [x] Sustituir el punto verde de estado del motor por un icono de `lucide-react` coherente con el estado y un nombre accesible.
+- [x] El historial permite buscar por título/lote y usa filas compactas con fecha de finalización, duración del medio y tiempo de descarga medido.
+- [x] El tiempo transcurrido se actualiza en la cola mientras descarga y se acumula correctamente tras pausar/reanudar; el total aparece al finalizar.
+- [x] El origen se identifica junto al título con icono no ambiguo y nombre accesible; no se habilitan sitios fuera de la allowlist actual.
+- [x] El arranque muestra una precarga de marca con spinner accesible hasta que respondan el puente y la cola; contempla fallo del puente y movimiento reducido.
+- [x] El error de espacio insuficiente queda visible en la fila de cola/historial, explica la recuperación y no depende de un toast temporal ni del log técnico.
+
+**Verificación:** build/lint, pruebas del cálculo/persistencia del tiempo de descarga, búsqueda/filtrado mockeados y smoke de precarga/cola con teclado y movimiento reducido.
+**Reverificación del arranque y movimiento:** pantalla de precarga independiente con marca y spinner. Se muestra al menos 1,8 s desde el primer fotograma y espera el estado del motor y de la cola antes de montar la interfaz. Una ejecución aislada en WebView2 midió 2,1 s visibles y comprobó la transición a la app. El smoke cubre puente inmediato, motor demorado, reintento, movimiento reducido, progreso indeterminado y selección de formato con foco neutro. Build y lint pasan.
+**Resultado:** `npm run build`, `npm run lint`, `python -m pytest -q` (83 pasadas, 2 subtests) y `python tests/ui_smoke_t40.py` pasan; también pasa smoke T39. UI smoke cubre spinner/error/reduced-motion, source icon, historial, timestamps, elapsed en cola e historial, error de disco y layout compacto con bridge simulado. Capturas en `.impeccable/review/t40-history-*.png`. No se descargaron medios; el error 153 real sigue pendiente de reiniciar/probar el PyWebView local.
+**Dependencias:** T37–T38.
+**Archivos previstos:** `frontend/src/App.tsx`, `frontend/src/App.css`, `frontend/src/index.css`, `frontend/package.json`, `frontend/package-lock.json`, `clipoteca/manager.py`, `clipoteca/storage.py`, `tests/test_manager.py`, pruebas UI.
+**Alcance:** L.
+
+### T41 — Cerrar revisión visual y documentar sistema
+
+**Descripción:** hacer la inspección final del rediseño y dejar el sistema visual actualizado con evidencia.
+
+**Criterios de aceptación:**
+- [ ] Capturas válidas en tema oscuro/claro y ventanas desktop, compacta y móvil; no hay overflow ni estados cortados.
+- [ ] Verificados teclado, foco, contraste, reduced-motion, texto largo y lectura de progreso/errores.
+- [ ] DESIGN.md describe el mundo construido; capturas/provenance y hallazgos pendientes quedan registrados.
+
+**Verificación:** `npm run build`, `npm run lint`, suites Python/CLI, smoke de pywebview; capturas inspeccionadas por viewport.
+**Dependencias:** T26, T36–T40, T01–T02.
+**Archivos previstos:** `DESIGN.md`, `docs/screenshots/`, `.impeccable/surfaces/frontend-src-app-tsx.md`, `frontend/src/`.
+**Alcance:** M.
+
+### T42 — Personalizar el color de la interfaz desde Ajustes
+
+**Descripción:** permitir elegir un color de acento para Clipoteca y previsualizarlo desde Ajustes.
+
+**Criterios de aceptación:**
+- [x] Ajustes permite elegir un acento de una selección de colores y volver al acento predeterminado.
+- [x] La elección se guarda localmente y se recupera al volver a abrir Clipoteca.
+- [x] El acento funciona con los modos Sistema, Claro y Oscuro y mantiene el contraste de textos, botones y focos.
+- [x] Los estados de error, éxito y progreso siguen siendo distinguibles con cualquier acento.
+
+**Verificación:** persistencia al reiniciar, inspección de contraste en ambos temas y navegación por teclado.
+**Resultado:** 88 pruebas Python y 10 subpruebas pasan, incluida la reapertura del puente con SQLite temporal. Build, lint y smokes T39/T40 pasan. El smoke cubre teclado, cancelar la previsualización, guardar el acento y contraste de las cinco muestras en claro y oscuro.
+**Dependencias:** T36, T37, T41.
+**Archivos previstos:** ajustes del frontend, tokens de color, preferencias locales y pruebas.
+**Alcance:** M.
+
+### T43 — Suavizar las transiciones de la barra lateral y los diálogos
+
+**Descripción:** animar el plegado manual de la barra lateral y la salida de los diálogos de Ajustes y cierre.
+
+**Criterios de aceptación:**
+- [x] La barra se pliega y despliega suavemente sin perder foco ni ocultar los controles de navegación.
+- [x] Los diálogos salen con una transición breve y devuelven el foco cuando corresponde.
+- [x] El movimiento reducido conserva toda la funcionalidad y omite el desplazamiento.
+
+**Verificación:** smoke con teclado, clic y movimiento reducido.
+**Resultado:** build, lint y smoke T40 pasan. El smoke comprueba la transición de la barra y el cierre de Ajustes con y sin movimiento, además de la devolución del foco.
+**Dependencias:** T38, T40.
+**Archivos previstos:** `frontend/src/App.tsx`, `frontend/src/App.css`, `tests/ui_smoke_t40.py`.
+**Alcance:** S.

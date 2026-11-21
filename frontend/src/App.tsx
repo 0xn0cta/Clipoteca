@@ -1,24 +1,38 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent, type RefObject } from 'react'
 import {
+  Activity,
   ArrowDownToLine,
   ArrowRight,
   BookOpen,
+  CalendarDays,
   Check,
   ChevronDown,
+  ChevronRight,
   CircleAlert,
   Clock3,
-  Eye,
   ExternalLink,
+  Film,
   FolderOpen,
+  Globe,
+  HardDrive,
+  History,
   Link2,
   ListVideo,
+  MonitorPlay,
+  Music2,
+  PanelLeftClose,
+  PanelLeftOpen,
   Pause,
   Play,
   RotateCcw,
+  Search,
   Settings2,
+  Layers2,
+  Timer,
   Trash2,
   X,
 } from 'lucide-react'
+import { SiYoutube } from 'react-icons/si'
 import logoMark from './assets/clipoteca-mark.svg'
 import './App.css'
 
@@ -50,15 +64,28 @@ type QueueItem = {
   id: string
   batch_id: string
   batch_title: string
+  source_url?: string | null
+  download_attempt_started_at?: string | null
   title: string
   duration: number | null
+  completed_at?: string | null
+  download_elapsed_seconds?: number | null
   status: ItemStatus
   progress: number
+  downloaded_bytes?: number
+  total_bytes?: number | null
+  download_phase?: 'preparing' | 'transfer' | 'video' | 'audio' | 'between_tracks' | 'merging' | 'converting' | 'finalizing' | 'retrying' | null
+  download_steps?: DownloadStep[] | null
   speed: number | null
   eta: number | null
   error: string | null
   output_path: string | null
   output_paths: string[]
+}
+
+type DownloadStep = {
+  id: 'video' | 'audio' | 'merge' | 'file' | 'save' | 'mp3_audio' | 'convert'
+  status: 'pending' | 'active' | 'done'
 }
 
 type PreviewResult = {
@@ -72,8 +99,19 @@ type PreviewResult = {
   playable: boolean
 }
 
+const accentOptions = [
+  ['clipoteca', 'Granate'],
+  ['iris', 'Iris'],
+  ['blue', 'Azul'],
+  ['green', 'Verde'],
+  ['amber', 'Ámbar'],
+] as const
+type ThemeAccent = (typeof accentOptions)[number][0]
+
 type Preferences = {
   destination: string
+  theme_mode?: 'system' | 'dark' | 'light' | null
+  theme_accent?: ThemeAccent | null
   concurrency_mode?: 'auto' | 'manual' | null
   manual_concurrency?: number | null
   auto_concurrency_cap?: number | null
@@ -121,6 +159,20 @@ declare global {
 
 const defaultPreferences: Preferences = {
   destination: 'Descargas\\Clipoteca',
+  theme_mode: 'system',
+  theme_accent: 'clipoteca',
+}
+
+const youtubeVideoIdPattern = /^[A-Za-z0-9_-]{11}$/
+const startupBannerMinMs = 1800
+
+function getCachedThemeMode(): NonNullable<Preferences['theme_mode']> {
+  try {
+    const mode = window.localStorage.getItem('clipoteca-theme-mode')
+    return mode === 'dark' || mode === 'light' ? mode : 'system'
+  } catch {
+    return 'system'
+  }
 }
 
 function formatDuration(value: number | null) {
@@ -140,6 +192,63 @@ function formatSpeed(value: number | null) {
   return `${Math.round(value / 1000)} KB/s`
 }
 
+function formatTimestamp(value: string | null | undefined) {
+  if (!value) return 'Fecha no disponible'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'Fecha no disponible'
+  return new Intl.DateTimeFormat('es-ES', {
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(date)
+}
+
+function formatElapsed(value: number | null | undefined) {
+  if (value == null || !Number.isFinite(value) || value <= 0) return 'Sin medición'
+  const seconds = Math.floor(value)
+  if (seconds < 60) return `${seconds} s`
+  const minutes = Math.floor(seconds / 60)
+  if (minutes < 60) return `${minutes} min ${seconds % 60} s`
+  return `${Math.floor(minutes / 60)} h ${minutes % 60} min`
+}
+
+function elapsedForItem(item: QueueItem) {
+  const accumulated = Math.max(0, item.download_elapsed_seconds ?? 0)
+  if (item.status !== 'downloading' || !item.download_attempt_started_at) return accumulated
+  const startedAt = Date.parse(item.download_attempt_started_at)
+  return Number.isFinite(startedAt)
+    ? accumulated + Math.max(0, (Date.now() - startedAt) / 1000)
+    : accumulated
+}
+
+function sourceLabel(sourceUrl: string | null | undefined) {
+  if (!sourceUrl) return 'Fuente desconocida'
+  try {
+    const host = new URL(sourceUrl).hostname.toLowerCase()
+    if (host === 'youtu.be' || host === 'youtube.com' || host.endsWith('.youtube.com')) {
+      return 'YouTube'
+    }
+  } catch {
+    // Bad or missing stored URLs stay a generic source rather than breaking the row.
+  }
+  return 'Otra fuente'
+}
+
+function SourceMark({ sourceUrl }: { sourceUrl: string | null | undefined }) {
+  const label = sourceLabel(sourceUrl)
+  return (
+    <span className="source-mark" role="img" aria-label={`Fuente: ${label}`} title={label}>
+      {label === 'YouTube'
+        ? <SiYoutube size={15} aria-hidden="true" />
+        : <Globe size={15} strokeWidth={1.8} aria-hidden="true" />}
+      <span aria-hidden="true">{label}</span>
+    </span>
+  )
+}
+
+function isDiskSpaceError(error: string | null | undefined) {
+  return /espacio|enospc|disk full|no space left|errno\s*28/i.test(error ?? '')
+}
+
 function statusLabel(status: ItemStatus) {
   const labels: Record<ItemStatus, string> = {
     queued: 'En cola',
@@ -152,27 +261,129 @@ function statusLabel(status: ItemStatus) {
   return labels[status]
 }
 
+function DownloadProgress({ item }: { item: QueueItem }) {
+  const phase = item.download_phase ?? (item.progress >= 1 ? 'finalizing' : 'transfer')
+  const transferring = phase === 'transfer' || phase === 'video' || phase === 'audio'
+  const total = item.total_bytes ?? 0
+  const downloaded = item.downloaded_bytes ?? total * item.progress
+  const fraction = transferring && total > 0
+    ? Math.max(0, Math.min(1, downloaded / total))
+    : null
+  const percent = fraction === null ? undefined : Math.min(99, Math.floor(fraction * 100))
+  const remainingSeconds = item.eta && item.eta > 0
+    ? item.eta
+    : total > downloaded && item.speed && item.speed > 0 ? (total - downloaded) / item.speed : null
+  const remaining = transferring && remainingSeconds && Number.isFinite(remainingSeconds)
+    ? formatElapsed(Math.ceil(remainingSeconds))
+    : null
+  const elapsed = Math.floor(elapsedForItem(item))
+  const speed = transferring ? formatSpeed(item.speed) : ''
+  const phaseLabel = {
+    preparing: 'Preparando descarga',
+    transfer: 'Descargando archivo',
+    video: 'Descargando pista de vídeo',
+    audio: 'Descargando pista de audio',
+    between_tracks: 'Preparando el siguiente paso',
+    merging: 'Uniendo vídeo y audio',
+    converting: 'Convirtiendo audio',
+    finalizing: 'Finalizando archivo',
+    retrying: 'Reintentando conexión',
+  }[phase]
+  const stepLabels: Record<DownloadStep['id'], string> = {
+    video: 'Vídeo',
+    audio: 'Audio',
+    merge: 'Unir',
+    file: 'Vídeo y audio',
+    save: 'Guardar',
+    mp3_audio: 'Audio MP3',
+    convert: 'Convertir',
+  }
+
+  return (
+    <div className="download-progress">
+      {!!item.download_steps?.length && <ol className="download-steps" aria-label="Pasos de la descarga">
+        {item.download_steps.map((step, index) => {
+          const status = step.status === 'active' && (phase === 'preparing' || phase === 'retrying')
+            ? 'pending' : step.status
+          const stateLabel = { pending: 'pendiente', active: 'en curso', done: 'completado' }[status]
+          const label = step.id === 'mp3_audio' && item.download_steps?.length === 2 ? 'Audio' : stepLabels[step.id]
+          return (
+            <li key={step.id} data-state={status} aria-current={status === 'active' ? 'step' : undefined} aria-label={`${label}, ${stateLabel}`}>
+              {index > 0 && <ChevronRight className="step-separator" size={12} aria-hidden="true" />}
+              <span className="step-mark" aria-hidden="true">
+                {status === 'done' && <Check size={10} strokeWidth={2.4} />}
+              </span>
+              {label}
+            </li>
+          )
+        })}
+      </ol>}
+      <div className={`progress-line${fraction === null ? ' is-indeterminate' : ''}`}>
+        <span role="progressbar" aria-label={`Descarga de ${item.title}`} aria-valuenow={percent} aria-valuetext={percent === undefined ? phaseLabel : `${phaseLabel} · ${percent}%`}>
+          <span style={fraction === null ? undefined : { transform: `scaleX(${Math.min(0.99, fraction)})` }} />
+        </span>
+        <small>{phaseLabel}{percent !== undefined ? ` · ${percent}%` : transferring ? ' · Progreso indeterminado' : ''}</small>
+      </div>
+      <div className="download-timing">
+        <span>Transcurrido <strong>{elapsed ? formatElapsed(elapsed) : '0 s'}</strong></span>
+        <span>Restante en esta fase <strong>{remaining ? `≈ ${remaining}` : transferring ? 'Calculando…' : 'Sin estimación'}</strong></span>
+        {speed && <span>{speed}</span>}
+      </div>
+    </div>
+  )
+}
+
+function dismissDialog(backdrop: HTMLDivElement | null, done: () => void) {
+  if (!backdrop || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    done()
+    return
+  }
+  if (backdrop.inert) return
+  backdrop.inert = true
+  const options: KeyframeAnimationOptions = { duration: 150, easing: 'ease-in', fill: 'forwards' }
+  backdrop.firstElementChild?.animate(
+    [{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(6px) scale(0.99)' }],
+    options,
+  )
+  const exit = backdrop.animate([{ opacity: 1 }, { opacity: 0 }], options)
+  void exit.finished.then(done, done)
+}
+
 function App() {
   const [api, setApi] = useState<DesktopApi | undefined>(() => window.pywebview?.api)
   const [view, setView] = useState<View>('prepare')
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [url, setUrl] = useState('')
   const [format, setFormat] = useState<Format>('video')
   const [quality, setQuality] = useState('auto')
   const [analysis, setAnalysis] = useState<Analysis | null>(null)
-  const [preview, setPreview] = useState<PreviewResult | null>(null)
+  const [previewItem, setPreviewItem] = useState<MediaItem | null>(null)
+  const [previewLoadState, setPreviewLoadState] = useState<'idle' | 'loading' | 'loaded' | 'error'>('idle')
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [queueState, setQueueState] = useState<QueueState | null>(null)
-  const [preferences, setPreferences] = useState<Preferences>(defaultPreferences)
+  const [preferences, setPreferences] = useState<Preferences>(() => ({
+    ...defaultPreferences,
+    theme_mode: getCachedThemeMode(),
+  }))
+  const [startupState, setStartupState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [startupAttempt, setStartupAttempt] = useState(0)
+  const [historyQuery, setHistoryQuery] = useState('')
   const [notice, setNotice] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [isPreviewing, setIsPreviewing] = useState(false)
   const [isEnqueueing, setIsEnqueueing] = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [previewAccent, setPreviewAccent] = useState<ThemeAccent | null>(null)
   const [closeConfirmOpen, setCloseConfirmOpen] = useState(false)
   const [engineReady, setEngineReady] = useState(false)
   const [ffmpegReady, setFfmpegReady] = useState(false)
   const [trayAvailable, setTrayAvailable] = useState(false)
   const firstRunPrompted = useRef(false)
+  const previewPanel = useRef<HTMLElement>(null)
+  const previewTrigger = useRef<HTMLButtonElement>(null)
+  const settingsTrigger = useRef<HTMLButtonElement>(null)
+  const settingsBackdrop = useRef<HTMLDivElement>(null)
+  const closeBackdrop = useRef<HTMLDivElement>(null)
+  const closeTrigger = useRef<HTMLElement | null>(null)
 
   const availableItems = useMemo(
     () => analysis?.items.filter((item) => item.available) ?? [],
@@ -181,49 +392,112 @@ function App() {
   const allSelected = availableItems.length > 0 && availableItems.every((item) => selectedIds.includes(item.id))
   const activeCount = queueState?.counts.active ?? 0
   const currentList = view === 'history' ? queueState?.history ?? [] : queueState?.queue ?? []
+  const normalizedHistoryQuery = historyQuery.trim().toLocaleLowerCase('es')
+  const visibleList = view === 'history' && normalizedHistoryQuery
+    ? currentList.filter((item) =>
+      `${item.title} ${item.batch_title}`.toLocaleLowerCase('es').includes(normalizedHistoryQuery),
+    )
+    : currentList
 
   useEffect(() => {
-    const onApiReady = () => setApi(window.pywebview?.api)
+    const onApiReady = () => {
+      const connected = window.pywebview?.api
+      if (connected && connected !== api) {
+        setStartupState('loading')
+        setApi(connected)
+      }
+    }
     window.addEventListener('pywebviewready', onApiReady)
     onApiReady()
     return () => window.removeEventListener('pywebviewready', onApiReady)
-  }, [])
+  }, [api])
 
   useEffect(() => {
-    if (!api) return
+    const mode = preferences.theme_mode ?? 'system'
+    const media = window.matchMedia('(prefers-color-scheme: light)')
+    const applyTheme = () => {
+      const theme = mode === 'system' ? (media.matches ? 'light' : 'dark') : mode
+      document.documentElement.dataset.theme = theme
+      document.documentElement.dataset.themeMode = mode
+      document.documentElement.style.colorScheme = theme
+      const themeColor = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')
+      if (themeColor) themeColor.content = theme === 'light' ? '#F4F0F1' : '#100B0D'
+    }
+
+    try {
+      window.localStorage.setItem('clipoteca-theme-mode', mode)
+    } catch {
+      // The preference remains available from the local desktop bridge.
+    }
+    applyTheme()
+    if (mode !== 'system') return
+    media.addEventListener('change', applyTheme)
+    return () => media.removeEventListener('change', applyTheme)
+  }, [preferences.theme_mode])
+
+  useEffect(() => {
+    document.documentElement.dataset.accent = previewAccent ?? preferences.theme_accent ?? 'clipoteca'
+  }, [previewAccent, preferences.theme_accent])
+
+  useEffect(() => {
+    if (!api) {
+      const timeout = window.setTimeout(() => setStartupState('ready'), 900)
+      return () => window.clearTimeout(timeout)
+    }
     let disposed = false
+    let paintFrame: number | undefined
+    let readyTimer: number | undefined
+    let interval: number | undefined
     const refresh = async () => {
       try {
         const state = await api.get_queue_state()
         if (!disposed) {
           setQueueState(state)
           setPreferences((current) => ({ ...current, ...state.preferences }))
-          if (!firstRunPrompted.current) {
-            firstRunPrompted.current = true
-            if (!state.preferences.concurrency_mode) setSettingsOpen(true)
-          }
         }
       } catch {
         if (!disposed) setNotice('No se pudo actualizar la cola. Comprueba que Clipoteca siga abierta.')
       }
     }
-    void api.get_app_status().then((status) => {
-      if (!disposed) {
+    // Give the banner a painted frame before counting its visible time.
+    const firstPaint = new Promise<number>((resolve) => {
+      paintFrame = window.requestAnimationFrame(() => {
+        paintFrame = window.requestAnimationFrame(resolve)
+      })
+    })
+    void Promise.all([api.get_queue_state(), api.get_app_status(), firstPaint])
+      .then(([state, status, paintedAt]) => {
+        if (disposed) return
+        setQueueState(state)
+        setPreferences((current) => ({ ...current, ...state.preferences }))
         setEngineReady(status.download_engine_ready)
         setFfmpegReady(status.ffmpeg_ready)
         setTrayAvailable(status.tray_available)
-      }
-    })
-    void refresh()
-    const interval = window.setInterval(() => void refresh(), 1200)
-    const onCloseRequest = () => setCloseConfirmOpen(true)
+        readyTimer = window.setTimeout(() => {
+          setStartupState('ready')
+          if (!firstRunPrompted.current) {
+            firstRunPrompted.current = true
+            if (!state.preferences.concurrency_mode) setSettingsOpen(true)
+          }
+          interval = window.setInterval(() => void refresh(), 1200)
+        }, Math.max(0, startupBannerMinMs - (performance.now() - paintedAt)))
+      })
+      .catch(() => {
+        if (!disposed) setStartupState('error')
+      })
+    const onCloseRequest = () => {
+      closeTrigger.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+      setCloseConfirmOpen(true)
+    }
     window.addEventListener('clipoteca:close-request', onCloseRequest)
     return () => {
       disposed = true
+      if (paintFrame !== undefined) window.cancelAnimationFrame(paintFrame)
+      window.clearTimeout(readyTimer)
       window.clearInterval(interval)
       window.removeEventListener('clipoteca:close-request', onCloseRequest)
     }
-  }, [api])
+  }, [api, startupAttempt])
 
   async function analyzeUrl() {
     if (!api) {
@@ -237,7 +511,8 @@ function App() {
     setIsAnalyzing(true)
     setNotice('')
     setAnalysis(null)
-    setPreview(null)
+    setPreviewItem(null)
+    setPreviewLoadState('idle')
     setSelectedIds([])
     try {
       const result = await api.analyze_url(url)
@@ -267,27 +542,28 @@ function App() {
     setSelectedIds(allSelected ? [] : availableItems.map((item) => item.id))
   }
 
-  async function previewSelection() {
-    if (!api || !analysis) {
-      setNotice('La vista previa está disponible al abrir Clipoteca para escritorio.')
+  function openPreview(item: MediaItem, trigger?: HTMLButtonElement) {
+    if (!youtubeVideoIdPattern.test(item.source_id)) {
+      setNotice('No se pudo reconocer el identificador de este video para abrir la vista previa.')
       return
     }
-    const item = analysis.items.find((candidate) => selectedIds.includes(candidate.id))
-    if (!item) return
-    setIsPreviewing(true)
     setNotice('')
-    try {
-      const result = await api.get_preview(analysis.analysis_id, item.id, format, quality)
-      if (!result.ok) {
-        setNotice(result.error ?? 'No se pudo preparar la vista previa.')
-        return
-      }
-      setPreview({ ...result, item_title: item.title })
-    } catch {
-      setNotice('No se pudo preparar la vista previa del elemento.')
-    } finally {
-      setIsPreviewing(false)
+    setPreviewItem(item)
+    if (previewItem?.source_id !== item.source_id || previewLoadState === 'error') {
+      setPreviewLoadState('loading')
     }
+    if (trigger) {
+      previewTrigger.current = trigger
+      previewPanel.current?.focus({ preventScroll: true })
+      previewPanel.current?.scrollIntoView({ block: 'nearest' })
+    }
+  }
+
+  function closePreview() {
+    setPreviewItem(null)
+    setPreviewLoadState('idle')
+    previewTrigger.current?.focus()
+    previewTrigger.current = null
   }
 
   async function startBatch() {
@@ -312,6 +588,8 @@ function App() {
       }
       setNotice(`${result.queued} elementos añadidos a la cola.`)
       setAnalysis(null)
+      setPreviewItem(null)
+      setPreviewLoadState('idle')
       setSelectedIds([])
       setUrl('')
       setView('queue')
@@ -330,7 +608,7 @@ function App() {
       setQueueState(state)
       setPreferences((current) => ({ ...current, ...state.preferences }))
     } catch {
-      // The regular poll reports transient bridge errors.
+      setNotice('No se pudo actualizar la cola. Comprueba que Clipoteca siga abierta.')
     }
   }
 
@@ -353,9 +631,24 @@ function App() {
       return
     }
     setPreferences({ ...defaultPreferences, ...result.preferences })
-    setSettingsOpen(false)
+    closeSettings()
     setNotice('Ajustes guardados.')
     await refreshQueue()
+  }
+
+  function closeSettings() {
+    dismissDialog(settingsBackdrop.current, () => {
+      setSettingsOpen(false)
+      setPreviewAccent(null)
+      settingsTrigger.current?.focus()
+    })
+  }
+
+  function returnFromCloseDialog() {
+    dismissDialog(closeBackdrop.current, () => {
+      setCloseConfirmOpen(false)
+      closeTrigger.current?.focus()
+    })
   }
 
   async function clearHistory() {
@@ -374,7 +667,7 @@ function App() {
   }
 
   async function cancelAll() {
-    if (!api || !window.confirm('¿Cancelar todas las descargas activas y pendientes? Los archivos incompletos se eliminarán.')) {
+    if (!api || !window.confirm('¿Cancelar todas las descargas activas, pendientes y pausadas? Los archivos incompletos se eliminarán.')) {
       return
     }
     await api.cancel_all()
@@ -396,9 +689,35 @@ function App() {
 
   const destinationName = preferences.destination || 'Descargas\\Clipoteca'
 
+  if (startupState === 'loading') {
+    return (
+      <main className="startup-screen">
+        <div className="startup-banner" role="status">
+          <img src={logoMark} alt="" aria-hidden="true" />
+          <div className="startup-copy">
+            <strong>Abriendo Clipoteca</strong>
+            <span>Preparando tus descargas e historial…</span>
+          </div>
+          <span className="startup-spinner" aria-hidden="true" />
+        </div>
+      </main>
+    )
+  }
+
   return (
-    <div className="app-shell">
-      <header className="app-header">
+    <div className="app-shell" data-sidebar-collapsed={sidebarCollapsed}>
+      {startupState === 'error' && <div className="startup-banner is-error" role="alert">
+        <CircleAlert size={20} aria-hidden="true" />
+        <div className="startup-copy">
+          <strong>No se pudo iniciar la cola</strong>
+          <span>Comprueba que la aplicación siga abierta e inténtalo otra vez.</span>
+        </div>
+        <button type="button" onClick={() => {
+            setStartupState('loading')
+            setStartupAttempt((attempt) => attempt + 1)
+          }}>Reintentar</button>
+      </div>}
+      <aside id="app-sidebar" className="app-sidebar" aria-label="Navegación lateral">
         <div className="header-inner">
           <button
             className="brand"
@@ -410,29 +729,77 @@ function App() {
             <span>clipoteca</span>
           </button>
 
-          <nav className="top-nav" aria-label="Navegación principal">
-            <button className={`top-nav-item ${view === 'prepare' ? 'is-active' : ''}`} type="button" onClick={() => setView('prepare')} aria-current={view === 'prepare' ? 'page' : undefined}>
-              Preparar
+          <nav className="sidebar-nav" aria-label="Navegación principal">
+            <button
+              className={`sidebar-nav-item ${view === 'prepare' ? 'is-active' : ''}`}
+              type="button"
+              onClick={() => setView('prepare')}
+              aria-label="Preparar"
+              aria-current={view === 'prepare' ? 'page' : undefined}
+              title="Preparar"
+            >
+              <span className="sidebar-nav-icon"><ListVideo size={18} strokeWidth={1.8} aria-hidden="true" /></span>
+              <span className="sidebar-label">Preparar</span>
             </button>
-            <button className={`top-nav-item ${view === 'queue' ? 'is-active' : ''}`} type="button" onClick={() => setView('queue')} aria-current={view === 'queue' ? 'page' : undefined}>
-              Cola <span className="nav-count">{activeCount}</span>
+            <button
+              className={`sidebar-nav-item ${view === 'queue' ? 'is-active' : ''}`}
+              type="button"
+              onClick={() => setView('queue')}
+              aria-label={`Cola, ${activeCount} descargas activas`}
+              aria-current={view === 'queue' ? 'page' : undefined}
+              title={`Cola · ${activeCount} activas`}
+            >
+              <span className="sidebar-nav-icon"><ArrowDownToLine size={18} strokeWidth={1.8} aria-hidden="true" /></span>
+              <span className="sidebar-label">Cola</span>
+              <span className="nav-count" aria-hidden="true">{activeCount}</span>
             </button>
-            <button className={`top-nav-item ${view === 'history' ? 'is-active' : ''}`} type="button" onClick={() => setView('history')} aria-current={view === 'history' ? 'page' : undefined}>
-              Historial <span className="nav-count">{queueState?.counts.completed ?? 0}</span>
+            <button
+              className={`sidebar-nav-item ${view === 'history' ? 'is-active' : ''}`}
+              type="button"
+              onClick={() => setView('history')}
+              aria-label={`Historial, ${queueState?.counts.completed ?? 0} resultados`}
+              aria-current={view === 'history' ? 'page' : undefined}
+              title={`Historial · ${queueState?.counts.completed ?? 0} resultados`}
+            >
+              <span className="sidebar-nav-icon"><History size={18} strokeWidth={1.8} aria-hidden="true" /></span>
+              <span className="sidebar-label">Historial</span>
+              <span className="nav-count" aria-hidden="true">{queueState?.counts.completed ?? 0}</span>
             </button>
           </nav>
 
           <div className="header-actions">
-            <span className="engine-status">
-              <span className={`engine-dot ${engineReady ? 'is-ready' : ''}`} aria-hidden="true" />
-              {engineReady ? 'Motor conectado' : 'Solo escritorio'}
+            <span
+              className={`engine-status ${engineReady ? 'is-ready' : 'is-offline'}`}
+              role="status"
+              aria-label={engineReady ? 'Motor de descargas conectado' : 'Motor disponible en la aplicación de escritorio'}
+              title={engineReady ? 'Motor conectado' : 'Solo escritorio'}
+            >
+              {engineReady
+                ? <Activity className="engine-status-icon" size={15} strokeWidth={2} aria-hidden="true" />
+                : <CircleAlert className="engine-status-icon" size={15} strokeWidth={1.8} aria-hidden="true" />}
+              <span className="engine-status-text">{engineReady ? 'Motor conectado' : 'Solo escritorio'}</span>
             </span>
-            <button className="settings-button" type="button" aria-label="Ajustes" onClick={() => setSettingsOpen(true)}>
+            <button ref={settingsTrigger} className="settings-button" type="button" aria-label="Ajustes" onClick={() => setSettingsOpen(true)} title="Ajustes">
               <Settings2 size={18} strokeWidth={1.7} aria-hidden="true" />
+              <span className="sidebar-label">Ajustes</span>
+            </button>
+            <button
+              className="settings-button sidebar-toggle"
+              type="button"
+              aria-label={sidebarCollapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+              title={sidebarCollapsed ? 'Expandir barra lateral' : 'Contraer barra lateral'}
+              aria-controls="app-sidebar"
+              aria-expanded={!sidebarCollapsed}
+              onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}
+            >
+              {sidebarCollapsed
+                ? <PanelLeftOpen size={18} strokeWidth={1.7} aria-hidden="true" />
+                : <PanelLeftClose size={18} strokeWidth={1.7} aria-hidden="true" />}
+              <span className="sidebar-label">Contraer barra</span>
             </button>
           </div>
         </div>
-      </header>
+      </aside>
 
       <main className="main-content">
         {view === 'prepare' ? (
@@ -442,7 +809,6 @@ function App() {
                 <h1>Prepara tu descarga.</h1>
                 <p>Pega un enlace. Revisa la lista. Guarda solo lo que quieras.</p>
               </div>
-              <span className="prototype-badge">{engineReady ? 'Motor conectado' : 'Vista de escritorio'}</span>
             </section>
 
             <section className="source-panel" aria-labelledby="source-title">
@@ -477,42 +843,17 @@ function App() {
                     <div className="playlist-title-line">
                       <h2 id="playlist-title">{analysis?.title ?? 'Contenido por analizar'}</h2>
                       {analysis && <span className="sample-badge">{analysis.is_playlist ? 'Playlist' : 'Video'}</span>}
+                      {analysis && <SourceMark sourceUrl={analysis.source_url} />}
                     </div>
                     <p>{analysis ? `${analysis.items.length} elementos · ${analysis.extractor || 'yt-dlp'}` : 'El manifiesto aparecerá aquí después del análisis'}</p>
                   </div>
                   {analysis && <div className="playlist-heading-actions">
                     <span className="availability-summary">{availableItems.length} disponibles</span>
-                    <button className="preview-button" type="button" disabled={!selectedIds.length || isPreviewing} onClick={() => void previewSelection()}>
-                      <Eye size={15} aria-hidden="true" />{isPreviewing ? 'Preparando…' : 'Previsualizar'}
-                    </button>
                   </div>}
                 </header>
 
                 {analysis ? (
                   <>
-                    {preview && <section className="preview-card" aria-label="Vista previa del elemento seleccionado">
-                      <div className={`preview-media ${preview.kind === 'audio' ? 'is-audio' : ''}`}>
-                        {preview.kind === 'video' && preview.playable && preview.url ? (
-                          <video controls playsInline preload="metadata" poster={preview.thumbnail ?? undefined} onError={() => setNotice('La fuente no permitió reproducir la vista previa en esta ventana.')}>
-                            <source src={preview.url} type={preview.mime_type || undefined} />
-                          </video>
-                        ) : preview.thumbnail ? (
-                          <img src={preview.thumbnail} alt={`Previsualización de ${preview.item_title}`} />
-                        ) : (
-                          <span className="preview-placeholder"><ListVideo size={24} aria-hidden="true" /></span>
-                        )}
-                      </div>
-                      <div className="preview-copy">
-                        <span className="preview-kicker">VISTA PREVIA · {preview.kind === 'audio' ? 'AUDIO' : 'VÍDEO'}</span>
-                        <h3>{preview.item_title}</h3>
-                        <p>{preview.playable ? 'Se reproduce desde la fuente; no se guarda en disco.' : 'El sitio no ofrece un flujo reproducible aquí. La miniatura y los metadatos sí sirven como referencia.'}</p>
-                        {preview.kind === 'audio' && preview.playable && preview.url && <audio controls preload="metadata" onError={() => setNotice('La fuente no permitió reproducir la vista previa de audio.')}>
-                          <source src={preview.url} type={preview.mime_type || undefined} />
-                        </audio>}
-                      </div>
-                      <button className="preview-close" type="button" aria-label="Cerrar vista previa" onClick={() => setPreview(null)}><X size={16} /></button>
-                    </section>}
-
                     <div className="selection-toolbar">
                       <label className="select-all-control">
                         <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label={allSelected ? 'Desmarcar elementos disponibles' : 'Seleccionar elementos disponibles'} />
@@ -535,6 +876,7 @@ function App() {
                         <tbody>
                           {analysis.items.map((item) => {
                             const checked = selectedIds.includes(item.id)
+                            const isPreviewOpen = previewItem?.id === item.id
                             return (
                               <tr className={`${checked ? 'is-selected' : ''} ${!item.available ? 'is-unavailable' : ''}`} key={item.id}>
                                 <td className="check-cell"><label className="row-check">
@@ -542,8 +884,25 @@ function App() {
                                   <span className="custom-check" aria-hidden="true"><Check size={12} strokeWidth={2.5} /></span>
                                 </label></td>
                                 <td className="title-cell">
-                                  <span className="item-title">{item.title}</span>
-                                  <span className="item-number">Elemento {String(item.index).padStart(2, '0')}</span>
+                                  <button
+                                    className="thumbnail-preview"
+                                    type="button"
+                                    aria-label={`Abrir vista previa de ${item.title} en YouTube`}
+                                    aria-current={isPreviewOpen || undefined}
+                                    title={`Reproducir ${item.title}`}
+                                    disabled={!youtubeVideoIdPattern.test(item.source_id)}
+                                    onClick={(event) => openPreview(item, event.currentTarget)}
+                                  >
+                                    <span className="thumbnail-fallback" aria-hidden="true"><ListVideo size={16} /></span>
+                                    {item.thumbnail && <img src={item.thumbnail} alt="" onError={(event) => { event.currentTarget.style.visibility = 'hidden' }} />}
+                                    <span className="thumbnail-play" aria-hidden="true">
+                                      {isPreviewOpen ? <MonitorPlay size={19} /> : <Play size={14} fill="currentColor" />}
+                                    </span>
+                                  </button>
+                                  <span className="item-copy">
+                                    <span className="item-title">{item.title}</span>
+                                    <span className="item-number">Elemento {String(item.index).padStart(2, '0')}</span>
+                                  </span>
                                 </td>
                                 <td className="item-duration"><Clock3 size={14} strokeWidth={1.7} aria-hidden="true" />{formatDuration(item.duration)}</td>
                                 <td><span className={`availability ${item.available ? 'is-available' : 'is-unavailable'}`}>
@@ -568,6 +927,62 @@ function App() {
                 )}
               </section>
 
+              <div className="workspace-side-column">
+                <section ref={previewPanel} className="preview-panel" aria-labelledby="preview-panel-title" tabIndex={-1}>
+                  <div className="preview-panel-heading">
+                    <h2 id="preview-panel-title">Vista previa</h2>
+                    {previewItem && <button
+                      className="preview-close"
+                      type="button"
+                      aria-label="Cerrar vista previa"
+                      onClick={closePreview}
+                    ><X size={16} aria-hidden="true" /></button>}
+                  </div>
+                  <div className="preview-player">
+                    {previewItem && previewLoadState !== 'error' ? (
+                      <iframe
+                        key={previewItem.source_id}
+                        title={`Reproductor de YouTube: ${previewItem.title}`}
+                        src={`https://www.youtube-nocookie.com/embed/${encodeURIComponent(previewItem.source_id)}?playsinline=1&rel=0`}
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowFullScreen
+                        loading="lazy"
+                        referrerPolicy="strict-origin-when-cross-origin"
+                        onLoad={() => setPreviewLoadState('loaded')}
+                        onError={() => setPreviewLoadState('error')}
+                      />
+                    ) : previewItem && previewLoadState === 'error' ? (
+                      <div className="preview-error" role="alert">
+                        <CircleAlert size={19} aria-hidden="true" />
+                        <span>No se pudo cargar el reproductor. Comprueba la conexión e inténtalo otra vez.</span>
+                        <button type="button" onClick={() => openPreview(previewItem)}>Reintentar</button>
+                      </div>
+                    ) : (
+                      <div className="preview-empty">
+                        <span><Play size={19} fill="currentColor" aria-hidden="true" /></span>
+                        <p>{analysis ? 'Pulsa la miniatura de un elemento para reproducirlo aquí.' : 'El reproductor aparecerá aquí al analizar un video o una playlist.'}</p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="preview-info">
+                    <h3>{previewItem?.title ?? 'Aún no hay ningún elemento abierto'}</h3>
+                    {previewItem ? (
+                      <>
+                        <div className="preview-metadata">
+                          <span>{formatDuration(previewItem.duration)}</span>
+                          <span>YouTube</span>
+                        </div>
+                        {previewLoadState === 'loading' && <p className="preview-load-status" role="status">Conectando con YouTube…</p>}
+                        <p>{previewLoadState === 'error'
+                          ? 'Revisa la conexión y vuelve a intentarlo.'
+                          : 'Vista previa en el reproductor oficial. No se guarda ningún archivo; algunos videos no permiten reproducción integrada.'}</p>
+                      </>
+                    ) : (
+                      <p>Elige una miniatura de la lista para abrir el reproductor integrado.</p>
+                    )}
+                  </div>
+                </section>
+
               <aside className="preferences-panel" aria-labelledby="preferences-title">
                 <div className="preferences-heading">
                   <h2 id="preferences-title">Preferencias</h2>
@@ -577,9 +992,10 @@ function App() {
                 <fieldset className="format-field">
                   <legend>Formato</legend>
                   <div className="format-options" role="group" aria-label="Formato de salida">
-                    {([['video', 'Video', 'MP4'], ['audio', 'Audio', 'MP3'], ['both', 'Ambos', '']] as const).map(([value, label, detail]) => (
-                      <button className={`format-option ${format === value ? 'is-active' : ''}`} type="button" aria-pressed={format === value} key={value} onClick={() => { setFormat(value); setPreview(null) }}>
-                        <span>{label}</span>{detail && <small>{detail}</small>}
+                    {([['video', 'Video', 'MP4', Film], ['audio', 'Audio', 'MP3', Music2], ['both', 'Ambos', 'MP4 + MP3', Layers2]] as const).map(([value, label, detail, Icon]) => (
+                      <button className={`format-option ${format === value ? 'is-active' : ''}`} type="button" aria-pressed={format === value} key={value} onClick={() => setFormat(value)}>
+                        <span className="format-option-label"><Icon size={14} aria-hidden="true" />{label}</span>
+                        <small>{detail}</small>
                       </button>
                     ))}
                   </div>
@@ -614,6 +1030,7 @@ function App() {
                 </div>
                 <div className="collection-note"><BookOpen size={16} strokeWidth={1.7} aria-hidden="true" /><span>Las playlists se guardan en su propia carpeta.</span></div>
               </aside>
+              </div>
             </div>
 
             {engineReady && !ffmpegReady && <p className="ffmpeg-warning" role="note">FFmpeg no está instalado o no está en PATH. Se necesita para MP3 y para combinar algunas pistas de vídeo.</p>}
@@ -635,39 +1052,68 @@ function App() {
                 <h1>{view === 'history' ? 'Historial' : 'Cola de descargas'}</h1>
                 <p>{view === 'history' ? 'Resultados de lotes finalizados. Limpiar el historial no borra los archivos.' : 'Estado y recuperación por elemento.'}</p>
               </div>
-              {view === 'history' ? (
-                <button className="secondary-action" type="button" disabled={!currentList.length} onClick={() => void clearHistory()}><Trash2 size={15} aria-hidden="true" />Limpiar historial</button>
+            {view === 'history' ? (
+                <div className="history-tools">
+                  <label className="history-search">
+                    <Search size={15} aria-hidden="true" />
+                    <span className="visually-hidden">Buscar por título o playlist</span>
+                    <input
+                      type="search"
+                      aria-label="Buscar en el historial"
+                      placeholder="Buscar en el historial"
+                      value={historyQuery}
+                      onChange={(event) => setHistoryQuery(event.target.value)}
+                    />
+                    {historyQuery && <button type="button" aria-label="Borrar búsqueda" onClick={() => setHistoryQuery('')}><X size={14} aria-hidden="true" /></button>}
+                  </label>
+                  <button className="secondary-action" type="button" disabled={!currentList.length} onClick={() => void clearHistory()}><Trash2 size={15} aria-hidden="true" />Limpiar historial</button>
+                </div>
               ) : (
                 <div className="queue-actions">
                   <button className="secondary-action" type="button" disabled={!queueState?.queue.some((item) => item.status === 'queued' || item.status === 'downloading')} onClick={() => void api?.pause_all()}><Pause size={15} aria-hidden="true" />Pausar todo</button>
                   <button className="secondary-action" type="button" disabled={!queueState?.queue.some((item) => item.status === 'paused')} onClick={() => void api?.resume_all()}><Play size={15} aria-hidden="true" />Reanudar</button>
-                  <button className="secondary-action danger-action" type="button" disabled={!queueState?.queue.some((item) => ['queued', 'downloading', 'paused', 'failed'].includes(item.status))} onClick={() => void cancelAll()}><X size={15} aria-hidden="true" />Cancelar todo</button>
+                  <button className="secondary-action danger-action" type="button" disabled={!queueState?.queue.some((item) => ['queued', 'downloading', 'paused'].includes(item.status))} onClick={() => void cancelAll()}><X size={15} aria-hidden="true" />Cancelar todo</button>
                 </div>
               )}
             </div>
 
-            {currentList.length ? (
+            {visibleList.length ? (
               <div className="download-list">
-                {currentList.map((item) => (
-                  <article className="download-row" key={item.id}>
+                {visibleList.map((item) => (
+                  <article className={`download-row ${view === 'history' ? 'is-history' : ''}`} key={item.id}>
                     <div className="download-row-main">
                       <div className="download-row-copy">
-                        <span className={`status-pill status-${item.status}`}>{statusLabel(item.status)}</span>
-                        <h2>{item.title}</h2>
+                        <div className="download-title-line">
+                          <span className={`status-pill status-${item.status}`}>{statusLabel(item.status)}</span>
+                          <h2>{item.title}</h2>
+                          <SourceMark sourceUrl={item.source_url} />
+                        </div>
                         <p>{item.batch_title}</p>
+                        {view === 'history' && <div className="history-metadata">
+                          <span><Clock3 size={13} aria-hidden="true" />{formatDuration(item.duration)} de video</span>
+                          <span><CalendarDays size={13} aria-hidden="true" />{formatTimestamp(item.completed_at)}</span>
+                          <span><Timer size={13} aria-hidden="true" />Descarga: {formatElapsed(item.download_elapsed_seconds)}</span>
+                        </div>}
                       </div>
                       <div className="download-row-actions">
                         {view === 'queue' && item.status === 'failed' && <button className="icon-action" type="button" title="Reintentar" aria-label={`Reintentar ${item.title}`} onClick={() => void api?.retry_item(item.id)}><RotateCcw size={16} /></button>}
                         {view === 'queue' && item.status !== 'failed' && <button className="icon-action" type="button" title="Cancelar elemento" aria-label={`Cancelar ${item.title}`} onClick={() => void api?.cancel_item(item.id)}><X size={16} /></button>}
                       </div>
                     </div>
-                    {view === 'queue' && item.status === 'downloading' && (
-                      <div className="progress-line" aria-label={`${Math.round(item.progress * 100)}% descargado`}>
-                        <span><span style={{ width: `${Math.max(0, Math.min(100, item.progress * 100))}%` }} /></span>
-                        <small>{Math.round(item.progress * 100)}%{formatSpeed(item.speed) ? ` · ${formatSpeed(item.speed)}` : ''}</small>
-                      </div>
+                    {view === 'queue' && item.status === 'downloading' && <DownloadProgress item={item} />}
+                    {view === 'queue' && item.status !== 'downloading' && (item.download_elapsed_seconds ?? 0) > 0 && (
+                      <div className="queue-elapsed"><Timer size={13} aria-hidden="true" />Tiempo descargando: {formatElapsed(item.download_elapsed_seconds)}</div>
                     )}
-                    {item.error && <p className={`download-row-message ${item.status === 'failed' ? 'is-error' : ''}`}>{item.error}</p>}
+                    {item.error && (isDiskSpaceError(item.error) ? (
+                      <div className="download-space-warning" role="alert">
+                        <HardDrive size={17} aria-hidden="true" />
+                        <div>
+                          <strong>Espacio insuficiente</strong>
+                          <p>{item.error}</p>
+                          <span>Libera espacio en la unidad de destino y vuelve a intentar este elemento.</span>
+                        </div>
+                      </div>
+                    ) : <p className={`download-row-message ${item.status === 'failed' ? 'is-error' : ''}`}>{item.error}</p>)}
                     {view === 'history' && item.output_paths?.length > 0 && <div className="history-file-actions">
                       {item.output_paths.map((path, index) => {
                         const extension = path.split('.').pop()?.toUpperCase() || 'ARCHIVO'
@@ -682,8 +1128,13 @@ function App() {
             ) : (
               <section className="queue-empty">
                 <span className="empty-icon"><ListVideo size={24} strokeWidth={1.5} aria-hidden="true" /></span>
-                <h2>{view === 'history' ? 'Aún no hay lotes finalizados' : 'La cola está vacía'}</h2>
-                <p>{view === 'history' ? 'Los elementos descargados aparecerán aquí.' : 'Analiza un enlace y prepara tu primer lote para verlo aquí.'}</p>
+                <h2>{view === 'history'
+                  ? currentList.length && historyQuery ? 'No hay coincidencias' : 'Aún no hay lotes finalizados'
+                  : 'La cola está vacía'}</h2>
+                <p>{view === 'history'
+                  ? currentList.length && historyQuery ? 'Prueba con otro título o nombre de playlist.' : 'Los elementos descargados aparecerán aquí.'
+                  : 'Analiza un enlace y prepara tu primer lote para verlo aquí.'}</p>
+                {view === 'history' && currentList.length > 0 && historyQuery && <button className="return-button" type="button" onClick={() => setHistoryQuery('')}>Limpiar búsqueda<X size={14} aria-hidden="true" /></button>}
                 {view === 'queue' && <button className="return-button" type="button" onClick={() => setView('prepare')}>Preparar una descarga<ArrowRight size={15} aria-hidden="true" /></button>}
               </section>
             )}
@@ -693,18 +1144,18 @@ function App() {
 
       {notice && <div className="toast" role="status"><span>{notice}</span><button type="button" aria-label="Cerrar aviso" onClick={() => setNotice('')}><X size={16} aria-hidden="true" /></button></div>}
 
-      {settingsOpen && <SettingsDialog firstRun={!preferences.concurrency_mode} preferences={preferences} onClose={() => setSettingsOpen(false)} onSave={(value) => void savePreferences(value)} />}
+      {settingsOpen && <SettingsDialog backdropRef={settingsBackdrop} firstRun={!preferences.concurrency_mode} preferences={preferences} onClose={closeSettings} onAccentPreview={setPreviewAccent} onSave={(value) => void savePreferences(value)} />}
 
-      {closeConfirmOpen && <div className="modal-backdrop" role="presentation">
+      {closeConfirmOpen && <div ref={closeBackdrop} className="modal-backdrop" role="presentation">
         <section className="dialog-panel close-dialog" role="dialog" aria-modal="true" aria-labelledby="close-title">
-          <button className="dialog-close" type="button" aria-label="Volver a la app" onClick={() => setCloseConfirmOpen(false)}><X size={18} /></button>
+          <button className="dialog-close" type="button" aria-label="Volver a la app" onClick={returnFromCloseDialog}><X size={18} /></button>
           <span className="dialog-icon"><CircleAlert size={20} /></span>
           <h2 id="close-title">Hay descargas pendientes</h2>
           <p>{trayAvailable ? 'Puedes dejarlas funcionando en segundo plano o pausarlas para continuar más tarde.' : 'Puedes pausar las descargas y continuar más tarde.'}</p>
           <div className="dialog-actions vertical-actions">
             {trayAvailable && <button className="primary-dialog-action" type="button" onClick={() => void closeInBackground()}>Seguir en segundo plano</button>}
             <button className="secondary-dialog-action" type="button" onClick={() => void pauseAndClose()}>Pausar y cerrar</button>
-            <button className="text-dialog-action" type="button" onClick={() => setCloseConfirmOpen(false)}>Volver a la app</button>
+            <button className="text-dialog-action" type="button" onClick={returnFromCloseDialog}>Volver a la app</button>
           </div>
         </section>
       </div>}
@@ -713,16 +1164,24 @@ function App() {
 }
 
 function SettingsDialog({
+  backdropRef,
   firstRun,
   preferences,
   onClose,
+  onAccentPreview,
   onSave,
 }: {
+  backdropRef: RefObject<HTMLDivElement | null>
   firstRun: boolean
   preferences: Preferences
   onClose: () => void
+  onAccentPreview: (accent: ThemeAccent) => void
   onSave: (value: Partial<Preferences>) => void
 }) {
+  const [themeMode, setThemeMode] = useState<NonNullable<Preferences['theme_mode']>>(
+    preferences.theme_mode ?? 'system',
+  )
+  const [accent, setAccent] = useState<ThemeAccent>(preferences.theme_accent ?? 'clipoteca')
   const [mode, setMode] = useState<'' | 'auto' | 'manual'>(preferences.concurrency_mode ?? '')
   const [manual, setManual] = useState(
     preferences.manual_concurrency == null ? '' : String(preferences.manual_concurrency),
@@ -738,6 +1197,8 @@ function SettingsDialog({
     event.preventDefault()
     if (!canSave || !mode) return
     onSave({
+      theme_mode: themeMode,
+      theme_accent: accent,
       concurrency_mode: mode,
       ...(mode === 'manual'
         ? { manual_concurrency: selectedCount }
@@ -745,17 +1206,52 @@ function SettingsDialog({
     })
   }
 
-  return <div className="modal-backdrop" role="presentation">
+  return <div ref={backdropRef} className="modal-backdrop" role="presentation">
     <form className="dialog-panel settings-dialog" role="dialog" aria-modal="true" aria-labelledby="settings-title" onSubmit={submit}>
       <button className="dialog-close" type="button" aria-label="Cerrar ajustes" onClick={onClose}><X size={18} /></button>
       <h2 id="settings-title">{firstRun ? 'Configura tu primera cola' : 'Ajustes de descarga'}</h2>
       <p>{firstRun ? 'Elige cuántas descargas pueden ejecutarse a la vez. Podrás cambiarlo después.' : 'La concurrencia automática se adapta al rendimiento hasta el valor que tú elijas.'}</p>
+      <label className="dialog-label" htmlFor="theme-mode">Apariencia</label>
+      <div className="select-shell">
+        <select id="theme-mode" value={themeMode} onChange={(event) => setThemeMode(event.target.value as NonNullable<Preferences['theme_mode']>)}>
+          <option value="system">Seguir Windows</option>
+          <option value="dark">Oscuro</option>
+          <option value="light">Claro</option>
+        </select>
+        <ChevronDown size={15} aria-hidden="true" />
+      </div>
+      <fieldset className="accent-field">
+        <legend>Color de acento</legend>
+        <div className="accent-options">
+          {accentOptions.map(([value, label]) => (
+            <label key={value} className="accent-option">
+              <input
+                type="radio"
+                name="theme-accent"
+                value={value}
+                checked={accent === value}
+                onChange={() => {
+                  setAccent(value)
+                  onAccentPreview(value)
+                }}
+              />
+              <span className="accent-swatch" data-accent={value}>
+                <span className="accent-dot" aria-hidden="true"><Check size={14} strokeWidth={2.5} /></span>
+                <span>{label}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
       <label className="dialog-label" htmlFor="concurrency-mode">Modo de concurrencia</label>
-      <select id="concurrency-mode" value={mode} onChange={(event) => setMode(event.target.value as '' | 'auto' | 'manual')}>
-        <option value="" disabled>Elige cómo ejecutar la cola</option>
-        <option value="auto">Automático</option>
-        <option value="manual">Manual</option>
-      </select>
+      <div className="select-shell">
+        <select id="concurrency-mode" value={mode} onChange={(event) => setMode(event.target.value as '' | 'auto' | 'manual')}>
+          <option value="" disabled>Elige cómo ejecutar la cola</option>
+          <option value="auto">Automático</option>
+          <option value="manual">Manual</option>
+        </select>
+        <ChevronDown size={15} aria-hidden="true" />
+      </div>
       {mode === 'auto' ? (
         <label className="dialog-label" htmlFor="auto-cap">
           Máximo elegido por ti
